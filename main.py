@@ -710,7 +710,7 @@ app.include_router(router)
 @app.get("/")
 async def serve_login():
     # Retorna o arquivo login.html que está na mesma pasta do código
-    return FileResponse("login.html")
+    return FileResponse("/telas/login.html")
 
 if __name__ == "__main__":
     import uvicorn
