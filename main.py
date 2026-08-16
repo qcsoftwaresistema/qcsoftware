@@ -707,9 +707,14 @@ def confirmar_redefinicao_senha(dados: ConfirmarRedefinicaoSchema, db: Session =
 # Inclui as rotas de autenticação
 app.include_router(router)
 
-@app.get("/")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Servir a pasta 'telas' para arquivos de suporte (CSS, JS, imagens)
+app.mount("/telas", StaticFiles(directory=os.path.join(BASE_DIR, "telas")), name="telas")
+
+# CERTIFIQUE-SE de que esta é a ÚNICA rota @app.get("/") no código
+@app.get("/", response_class=FileResponse)
 async def serve_login():
-    # Caminho correto relativo à pasta do projeto: pasta_do_projeto/telas/login.html
     login_path = os.path.join(BASE_DIR, "telas", "login.html")
     return FileResponse(login_path)
 
