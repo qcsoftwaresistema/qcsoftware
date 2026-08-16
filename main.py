@@ -708,16 +708,30 @@ def confirmar_redefinicao_senha(dados: ConfirmarRedefinicaoSchema, db: Session =
 # Inclui as rotas de autenticação
 app.include_router(router)
 
+# Mapeia a pasta do projeto
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TELAS_DIR = os.path.join(BASE_DIR, "telas")
 
-# Servir a pasta 'telas' para arquivos de suporte (CSS, JS, imagens)
-app.mount("/telas", StaticFiles(directory=os.path.join(BASE_DIR, "telas")), name="telas")
+# 1. Monta a pasta telas para liberar arquivos CSS, JS e imagens
+# Permite acessar arquivos como: https://sistema.qcsoftware.com.br/telas/script.js
+if os.path.exists(TELAS_DIR):
+    app.mount("/telas", StaticFiles(directory=TELAS_DIR), name="telas")
 
-# CERTIFIQUE-SE de que esta é a ÚNICA rota @app.get("/") no código
+# 2. Rota Principal: Redireciona e entrega o arquivo login.html
 @app.get("/", response_class=FileResponse)
-async def serve_login():
-    login_path = os.path.join(BASE_DIR, "telas", "login.html")
-    return FileResponse(login_path)
+async def read_root():
+    login_file = os.path.join(TELAS_DIR, "login.html")
+    if os.path.exists(login_file):
+        return FileResponse(login_file)
+    return {"error": f"Arquivo login.html nao encontrado em {login_file}"}
+
+# Exemplo de rota opcional para acessar diretamente /login
+@app.get("/login", response_class=FileResponse)
+async def read_login():
+    return FileResponse(os.path.join(TELAS_DIR, "login.html"))
+
+# SUAS OUTRAS ROTAS DA API PERMANECEM ABAIXO:
+# @app.post("/api/login") ...
 
 if __name__ == "__main__":
     import uvicorn
