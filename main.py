@@ -2,6 +2,7 @@ from datetime import datetime
 from multiprocessing import get_context
 import os
 from fastapi import APIRouter, BackgroundTasks, FastAPI, Depends, HTTPException, logger, status
+from fastapi.responses import FileResponse
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
