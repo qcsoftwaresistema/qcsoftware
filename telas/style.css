@@ -1,0 +1,354 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap');
+
+:root {
+    --sidebar-width: 280px;
+    --sidebar-width-collapsed: 78px;
+    --menu-lateral-claro: #E2E2E4; /* Cinza claro */
+    --menu-lateral-escuro: #828082; /* Cinza escuro */
+    --laranja: #FF6B35; /*variável cor laranja declarada */
+    --verde: #2E933C; /*variável cor verde declarada */
+    --vermelho: #D64933; /*variável cor vermelho declarada */
+    --amarelo: #F0C808; /*variável cor amarelo declarada */
+    --branco: #FFFFFF; /*variável cor branco declarada */
+    --fundo: #F4F6F9; /*variável cor clara declarada */
+    --borda: #DEE2E6; /*variável cor clara declarada */
+    --texto: #000; /*variável cor preto declarada */
+    --cinza: #6C757D; /*variável cor cinza declarada */
+    --fundotela: #1d3151; /*variável cor de fundo da tela*/
+    --verdeciano1: #7AF6EE; /*variável cor verde ciano clara declarada*/
+    --verdeciano2: #EAFFFE; /*variável cor verde ciano escura declarada*/
+}
+
+body {
+    overflow-x: hidden;
+}
+
+.sidebar {
+    width: var(--sidebar-width);
+    height: 100vh !important;
+    min-height: 100vh !important;
+    background: linear-gradient(180deg, var(--menu-lateral-claro), var(--menu-lateral-escuro));
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    
+    /* ALTERAÇÃO CRUCIAL: Fixa a barra na esquerda da tela inteira, impedindo qualquer invasão de fundo */
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 1000 !important; /* Garante que ela fique por cima de qualquer outro fundo */
+    
+    overflow: hidden !important; 
+    box-sizing: border-box !important; 
+}
+
+.logo {
+    display: flex !important;
+    justify-content: center !important; /* Centraliza na horizontal */
+    align-items: center !important;     /* Centraliza na vertical */
+    width: 100% !important;             /* Força a largura do menu lateral */
+    padding: 20px !important;           /* Dá um espaço interno para não colar nas bordas */
+    box-sizing: border-box !important;  /* Evita que o padding quebre o layout */
+}
+
+/* IMAGEM DA LOGO: Define o tamanho exato e correto */
+.logo img {
+    display: block !important;
+    width: 80px !important;             /* Força a largura em 60px */
+    height: 80px !important;            /* Força a altura em 60px */
+    object-fit: contain !important;     /* Mantém a proporção do desenho sem distorcer */
+}
+
+.sidebar.collapsed {
+    width: var(--sidebar-width-collapsed);
+}
+
+.sidebar-link {
+    color: var(--texto);
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    margin: 4px 16px;
+    white-space: nowrap;
+    overflow: hidden;    
+}
+
+.sidebar-link:hover {
+    color: #ffffff;
+    background: var(--verdeciano1);
+    transform: translateX(5px);
+}
+
+.sidebar-link.active {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* --- 1. CONFIGURAÇÃO GERAL DA COR (Aplica no Ícone e no Texto) --- */
+.sidebar-texto {
+    font-size: 1.5rem; 
+    display: inline-block;   
+    background: var(--texto);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-fill-color: transparent;
+    color: var(--verdeciano1); 
+}
+
+.sidebar-texto2 {
+    font-size: 1.5rem; 
+    font-weight: 800;
+    display: inline-block;   
+    background: var(--verdeciano1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-fill-color: transparent;
+    color: var(--verdeciano1); 
+}
+
+/* --- 2. AJUSTE EXCLUSIVO PARA O TEXTO (Ativa a Poppins SEM quebrar o Ícone) --- */
+/* Usamos 'span.sidebar-texto' para que a fonte Poppins mude APENAS nas letras */
+span.sidebar-texto {
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+    font-weight: 800; /* Peso extra-bold para o texto */
+}
+
+/* --- 3. AJUSTE EXCLUSIVO PARA O ÍCONE (Garante o peso visual dele) --- */
+i.sidebar-texto {
+    font-weight: 900; /* Peso ideal para os ícones do FontAwesome ficarem fortes */
+}
+
+/* --- 4. REGRA PARA QUANDO A SIDEBAR FECHAR --- */
+.sidebar.collapsed span.sidebar-texto {
+    display: none !important;
+}
+
+.sidebar.collapsed i.sidebar-texto {
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+}
+
+/* --- REGRA PARA QUANDO A SIDEBAR FECHAR --- */
+.sidebar.collapsed span.sidebar-texto {
+    display: none !important;
+}
+
+.sidebar.collapsed i.sidebar-texto {
+    margin-right: 0 !important;
+    margin-left: 0 !important; 
+}
+
+.logo-text {
+    background: linear-gradient(45deg, #6b8cff, #8b9fff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    transition: opacity 0.3s ease;
+}
+
+.notification-badge {
+    background: #ff6b6b;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+}
+
+.profile-section {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 15px; /* Adicionado um respiro interno para os textos não colarem nas bordas */
+    
+    /* FIXO NO RODAPÉ DA SIDEBAR */
+    position: absolute !important;
+    bottom: 0 !important;   /* Cola perfeitamente na base cinza */
+    left: 0 !important;     /* Alinha totalmente à esquerda */
+    width: 100% !important; /* Ocupa toda a largura interna da sidebar */
+    
+    box-sizing: border-box !important;
+    
+    /* Mantém transparente para herdar o gradiente que vem lá do fundo da .sidebar */
+    background: transparent !important; 
+}
+
+.main-content {
+    /* FORÇA O ENCAIXE PERFEITO: O conteúdo começa exatamente onde a barra termina */
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: var(--sidebar-width) !important; /* Cola na lateral da sidebar aberta */
+    width: calc(100vw - var(--sidebar-width)) !important; /* Ocupa o resto exato da tela */
+    
+    background-color: var(--fundotela) !important; 
+    min-height: 100vh !important; 
+    box-sizing: border-box !important;
+    padding: 20px !important;
+    margin: 0 !important; /* Zera qualquer margem que possa criar a faixa branca */
+    transition: all 0.3s ease !important; 
+}
+
+/* REGRA CRUCIAL: Quando a barra fechar, o painel azul se move junto instantaneamente */
+.sidebar.collapsed ~ .main-content {
+    left: var(--sidebar-width-collapsed) !important; /* Cola na sidebar fechada */
+    width: calc(100vw - var(--sidebar-width-collapsed)) !important; /* Expande o resto */
+}
+
+/* Quando a sidebar estiver FECHADA (collapsed), o conteúdo expande na tela toda */
+.sidebar.collapsed ~ .main-content {
+    /* Faz o cálculo dinâmico: 100% da tela MENOS a largura da sidebar fechada */
+    width: calc(100vw - var(--sidebar-width-collapsed));
+    margin-left: var(--sidebar-width-collapsed);
+}
+
+.collapsed~.main-content {
+    margin-left: var(--sidebar-width-collapsed);
+}
+
+.toggle-btn {
+    position: absolute;
+    right: -10px;
+    top: 120px;
+    background: white;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    border: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.collapsed .toggle-btn {
+    transform: rotate(180deg);
+}
+
+.collapsed .hide-on-collapse {
+    opacity: 0;
+    visibility: hidden;
+    
+}
+
+.collapsed .logo-text {
+    opacity: 0;
+}
+
+.collapsed .profile-info {
+    opacity: 0;
+}
+
+.collapsed .sidebar-link {
+    text-align: center;
+    padding: 1rem !important;
+    margin: 4px 8px;
+}
+
+.collapsed .sidebar-link i {
+    margin: 0 !important;
+}
+
+.profile-info {
+    transition: opacity 0.2s ease;
+}
+
+.tabela {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tabela th {
+    background-color: var(--fundo);
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--texto);
+    border-bottom: 2px solid var(--cinza);
+}
+
+.tabela td{
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--borda);
+    vertical-align: middle;
+}
+
+.tabela tr:hover td {
+    background-color: rgba(255, 107, 53, 0.04);
+}
+
+.tabela-container {
+    overflow-x: auto;
+    background: var(--branco);
+    border-radius: 10px;
+    border: 1px solid var(--borda);
+}
+
+.tabela-container .tabela {
+    margin: 0;
+}
+
+.mensagem-tabela {
+    padding: 40px;
+    color: var(--cinza);
+}
+
+.centralizado,
+.text-center {
+    text-align: center;
+}
+
+/* --- Sidebar em dispositivos mobile --- */
+@media (max-width: 768px) {
+    .sidebar {
+        width: var(--sidebar-width-collapsed) !important;
+        left: calc(-1 * var(--sidebar-width-collapsed)) !important;
+        transition: left 0.3s ease !important;
+    }
+
+    .sidebar.mobile-open {
+        left: 0 !important;
+        box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .sidebar span.sidebar-texto {
+        display: none !important;
+    }
+
+    .sidebar .profile-info {
+        opacity: 0;
+        visibility: hidden;
+    }
+
+    .sidebar .sidebar-link {
+        text-align: center;
+        padding: 1rem !important;
+        margin: 4px 8px;
+    }
+
+    .sidebar .sidebar-link i {
+        margin: 0 !important;
+    }
+
+    /* Botão visível na borda esquerda com o menu fechado */
+    .sidebar:not(.mobile-open) ~ .toggle-btn {
+        left: 0 !important;
+        transform: rotate(180deg) !important;
+    }
+
+    .sidebar.mobile-open ~ .toggle-btn {
+        left: calc(var(--sidebar-width-collapsed) - 22px) !important;
+        transform: rotate(0deg) !important;
+    }
+
+    .sidebar ~ .main-content,
+    .sidebar.collapsed ~ .main-content {
+        left: 0 !important;
+        width: 100vw !important;
+        margin-left: 0 !important;
+        padding-left: 20px !important;
+    }
+
+    .sidebar.mobile-open ~ .main-content {
+        left: var(--sidebar-width-collapsed) !important;
+        width: calc(100vw - var(--sidebar-width-collapsed)) !important;
+        padding-left: 20px !important;
+    }
+}

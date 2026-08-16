@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Q.C Software - Relatório de Listagem de Não Conformidades</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <script>
+    // VERIFICAÇÃO DE AUTENTICAÇÃO (PROTEÇÃO DE ROTA)
+    (function verificarAutenticacao() {
+        const usuarioLogado = sessionStorage.getItem("qc_user");
+
+        if (!usuarioLogado) {
+            console.warn("⛔ Acesso não autorizado! Redirecionando para a tela de login...");
+            // Redireciona imediatamente para a tela de login
+            window.location.href = "login.html"; // ou "/telas/login.html" / "login.html" conforme a estrutura de pastas
+        }
+    })();
+</script>
+
+    <style>
+        /* ==========================================================================
+           ESTILOS GERAIS DA TELA (PREVISUALIZAÇÃO)
+           ========================================================================== */
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #1a2d4c; 
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .conteudo-principal {
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        .cabecalho-sistema {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .logo-qc img {
+            height: 50px; 
+            object-fit: contain;
+        }
+
+        .card-ocorrencias {
+            background-color: #ffffff;
+            color: #333333;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .tabela-dados {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .tabela-dados th {
+            font-weight: 500;
+            background-color: #f8f9fa;
+            color: #4a5568;
+            text-align: left;
+            padding: 12px 10px;
+            font-size: 14px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .tabela-dados td {
+            padding: 12px 10px;
+            font-size: 13px;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: middle;
+        }
+
+        .tabela-dados td.sem-dados {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .btn-voltar {
+            margin-bottom: 15px;
+        }
+
+        /* Estilização dos Status */
+        .badge-pendente {
+            background-color: #fde8e8;
+            color: #9b1c1c;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .badge-andamento {
+            background-color: #fef08a;
+            color: #854d0e;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        /* ==========================================================================
+           REGRAS DE IMPRESSÃO (O que acontece ao gerar o PDF)
+           ========================================================================== */
+        @media print {
+            @page { 
+                size: landscape; 
+                margin: 10mm;
+            }
+
+            body {
+                font-family: 'Roboto', sans-serif !important;
+                background-color: #ffffff !important;
+                color: #000000 !important;
+                padding: 0;
+            }
+
+            .logo-qc img {
+                filter: brightness(0) !important;
+            }
+
+            .btn, button, .btn-voltar {
+                display: none !important;
+            }
+
+            .cabecalho-sistema {
+                border-bottom: 2px solid #1a2d4c;
+            }
+
+            .cabecalho-sistema h2 {
+                color: #000000 !important;
+            }
+
+            .card-ocorrencias {
+                padding: 0 !important;
+                box-shadow: none !important;
+                background-color: transparent !important;
+            }
+
+            .tabela-dados th {
+                background-color: #e2e8f0 !important; 
+                color: #000000 !important;
+                border-bottom: 1px solid #cbd5e0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <a href="javascript:history.back()" class="btn btn-sm btn-outline-light btn-voltar">
+        <i class="fas fa-arrow-left me-2"></i>Voltar para a Listagem
+    </a>
+
+    <main class="conteudo-principal">
+        
+        <header class="cabecalho-sistema">
+            <div class="logo-qc">
+                <img src="/telas/imagens/logoqc.png" alt="Q.C Software">
+            </div>
+            <h2>Relatório de Listagem de Não Conformidades</h2>
+            <button onclick="window.print()" class="btn btn-outline-secondary">
+                <i class="fas fa-print me-2"></i>Imprimir
+            </button>
+        </header>
+
+        <section class="card-ocorrencias">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3 class="fs-5 m-0 text-dark">Não Conformidades Cadastradas</h3>
+                <span id="contadorBadge" class="badge bg-dark">0</span>
+            </div>
+
+            <table class="tabela-dados">
+                <thead>
+                    <tr>
+                        <th>Lote Produto</th>
+                        <th>Nº Ocorrência</th>
+                        <th>Data/Hora</th>
+                        <th>Produto</th>
+                        <th>Máquina</th>
+                        <th>Ocorrência</th>
+                        <th>Colaborador</th>
+                        <th>Situação</th>
+                        <th>Foto</th>
+                    </tr>
+                </thead>
+                <tbody id="conteudoRelatorio">
+                    <tr>
+                        <td colspan="9" class="sem-dados">Carregando dados do relatório...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+    </main>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const dadosRecebidos = localStorage.getItem("dadosFiltroRelatorio");
+            const tabelaCorpo = document.getElementById("conteudoRelatorio");
+            const contadorBadge = document.getElementById("contadorBadge");
+
+            if (dadosRecebidos) {
+                const dados = JSON.parse(dadosRecebidos);
+                
+                if (dados.length > 0) {
+                    tabelaCorpo.innerHTML = ""; 
+                    contadorBadge.innerText = dados.length;
+
+                    dados.forEach(item => {
+                        const tr = document.createElement("tr");
+
+                        // Tratamento visual para a coluna de Situação
+                        let situacaoHTML = '';
+                        const situacaoTexto = (item.situacao || '').toLowerCase().trim();
+                        if (situacaoTexto === 'pendente') {
+                            situacaoHTML = `<span class="badge-pendente">Pendente</span>`;
+                        } else if (situacaoTexto === 'em andamento' || situacaoTexto === 'andamento') {
+                            situacaoHTML = `<span class="badge-andamento">Em andamento</span>`;
+                        } else {
+                            situacaoHTML = `<span>${item.situacao || ''}</span>`;
+                        }
+
+                        // Tratamento para o ícone de fotos
+                        let fotoHTML = '<i class="far fa-image text-muted" style="font-size: 1.2rem;"></i>';
+                        if (item.temFoto || item.foto) {
+                            fotoHTML = '<i class="fas fa-image text-primary" style="font-size: 1.2rem;"></i>';
+                        }
+
+                        // ATENÇÃO: Caso as colunas fiquem vazias, altere as chaves 'item.lote', 'item.numero', etc.
+                        // para o nome exato dos atributos gerados na tela de cadastro original.
+                        tr.innerHTML = `
+                            <td>${item.lote || item.loteProduto || ''}</td>
+                            <td>${item.numero || item.numeroOcorrencia || ''}</td>
+                            <td>${item.dataHora || item.data || ''}</td>
+                            <td>${item.produto || ''}</td>
+                            <td>${item.maquina || ''}</td>
+                            <td>${item.ocorrencia || ''}</td>
+                            <td>${item.colaborador || ''}</td>
+                            <td>${situacaoHTML}</td>
+                            <td class="text-center">${fotoHTML}</td>
+                        `;
+                        tabelaCorpo.appendChild(tr);
+                    });
+                } else {
+                    exibirSemDados();
+                }
+            } else {
+                exibirSemDados();
+            }
+
+            function exibirSemDados() {
+                tabelaCorpo.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="sem-dados">Nenhuma ocorrência encontrada para os filtros aplicados.</td>
+                    </tr>
+                `;
+                contadorBadge.innerText = "0";
+            }
+
+            // Aguarda a renderização para chamar a janela de impressão
+            setTimeout(() => {
+                window.print();
+            }, 700);
+        });
+    </script>
+
+</body>
+</html>

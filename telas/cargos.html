@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q.C Software - Cargos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+
+    <script>
+    // VERIFICAÇÃO DE AUTENTICAÇÃO (PROTEÇÃO DE ROTA)
+    (function verificarAutenticacao() {
+        const usuarioLogado = sessionStorage.getItem("qc_user");
+
+        if (!usuarioLogado) {
+            console.warn("⛔ Acesso não autorizado! Redirecionando para a tela de login...");
+            // Redireciona imediatamente para a tela de login
+            window.location.href = "login.html"; // ou "/telas/login.html" / "login.html" conforme a estrutura de pastas
+        }
+    })();
+</script>
+
+</head>
+<body class="bg-body-tertiary text-body">
+
+    <div class="d-flex">
+        <nav id="sidebar" class="sidebar d-flex flex-column flex-shrink-0 position-fixed">
+            <button class="toggle-btn" onclick="toggleSidebar()">
+                <i id="toggle-icon" class="fas fa-chevron-left"></i>
+            </button>
+
+            <div class="logo" style="display: flex !important; justify-content: center !important; align-items: center !important; width: 100% !important; padding: 15px !important; box-sizing: border-box !important;">
+                <img src="imagens/logo.png" alt="Logo" style="display: block !important; width: 85px !important; height: 85px !important; object-fit: contain !important;">
+            </div>
+
+            <div class="nav flex-column">
+                
+                <a href="/telas/dashboard.html" class="sidebar-link text-decoration-none p-3" target="_blank" rel="noopener noreferrer">
+                    <i class="sidebar-texto fa-solid fa-chart-line"></i>
+                    <span class="sidebar-texto">Dashboard</span>
+                </a> 
+                
+                <a href="/telas/produtos.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fas fa-box me-3"></i>
+                    <span class="sidebar-texto">Produtos</span>
+                </a> 
+                
+                 <a href="/telas/maquinas.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fas fa-industry me-2"></i>
+                    <span class="sidebar-texto">Máquinas</span>
+                </a>  
+
+                 <a href="/telas/cargos.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fa fa-address-card me-2"></i>
+                    <span class="sidebar-texto">Cargos</span>
+                </a>
+
+                <a href="/telas/colaboradores.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fa fa-user me-2"></i>
+                    <span class="sidebar-texto">Colaboradores</span>
+                </a>
+
+                <a href="/telas/monitoramento.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fa-solid fa-list-check me-2"></i>
+                    <span class="sidebar-texto">Monitoramento</span>
+                </a>
+
+                <a href="https://mapamaquinas.qcsoftware.com.br" class="sidebar-link text-decoration-none p-3" target="_blank" rel="noopener noreferrer">
+                <i class="sidebar-texto fas fa-map-location-dot me-2"></i>
+                <span class="sidebar-texto">Mapa/Máquinas</span>
+                </a>
+
+                <div class="profile-section mt-auto" style="background: transparent; width: 100%; padding: 12px 15px; box-sizing: border-box;">
+    <div class="d-flex p-0 text-start w-100">
+        <div class="profile-info w-100">
+            
+            <div class="d-flex align-items-center justify-content-between gap-2" style="margin-bottom: 6px; line-height: 1.1;">
+                <div class="fw-bold text-truncate" id="usuario-nome" style="color: #ffffff; font-size: 0.8rem;" title="Carregando...">
+                    Usuário: Carregando...
+                </div>
+                <button type="button" class="btn btn-danger btn-sm px-2 py-0 d-inline-flex align-items-center justify-content-center gap-1 shadow-sm flex-shrink-0" onclick="sairDoSistema()" style="font-size: 0.7rem; border-radius: 4px; height: 20px;">
+                    <i class="fa-solid fa-right-from-bracket"></i> Sair
+                </button>
+            </div>
+
+            <div class="text-truncate" id="usuario-perfis" style="color: #ffffff; font-size: 0.8rem; margin-bottom: 6px; line-height: 1;">
+                Perfil: Carregando...
+            </div>
+
+            <div style="color: #ffffff; font-size: 0.8rem; margin-bottom: 6px; line-height: 1;">
+                Data: <span id="data-brasilia">--/--/----</span>
+            </div>
+
+            <div style="color: #ffffff; font-size: 0.8rem; margin-bottom: 8px; line-height: 1;">
+                Hora: <span id="hora-brasilia">--:--</span>
+            </div>
+
+            <div class="fw-bold border-top pt-2" style="color: rgba(255, 255, 255, 0.7); font-size: 0.7rem; line-height: 1.1; border-color: rgba(255, 255, 255, 0.15) !important;">
+                © Q.C Software - versão 1.0
+            </div>                
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="main-content" style="margin-left: 260px; width: 100%;"> 
+            <div class="container-fluid mb-4 mt-3">
+                <i class="sidebar-texto2 fas fa fa-address-card me-3 fw-bold"></i>
+                <span class="sidebar-texto2 fw-bold">Cargos</span>
+            </div>
+
+            <!-- SEÇÃO DO FORMULÁRIO (CREATE / UPDATE) -->
+            <section class="mb-4">            
+                <div class="col-12">
+                    <div class="card shadow-sm p-4 border-0 bg-body">
+
+                        <div class="d-block w-100 text-end mt-2">
+                            <button type="submit"
+                                    form="formCargos"
+                                    class="btn btn-success btn-sm py-1 px-3 fw-bold d-inline-flex align-items-center"
+                                    style="font-size: 0.95rem;">
+                                <i class="bi bi-floppy me-2"></i> Salvar
+                            </button>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h4 class="mb-0 fw-bold text-body" id="titulo-form-cargo">
+                                <i class="sidebar-texto fas fa fa-address-card me-3"></i> Cargo
+                            </h4>
+                            <small class="text-muted d-block">
+                            <span class="text-danger fw-bold">*</span> Todos os campos obrigatórios.
+                        </small>                        
+                           
+                        </div>
+                        
+                        <form id="formCargos" class="row g-3 align-items-end">
+                            <input type="hidden" id="cargo-id">
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-body">Nome</label>
+                                <input type="text" id="cargos-nome" class="form-control bg-body text-body shadow-none" required placeholder="Ex: Digite o nome do cargo...">
+                            </div>                 
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-body">Situação</label>
+                                <select class="form-select bg-body text-body shadow-none" id="cargos-situacao">
+                                    <option value="true">Ativo</option>
+                                    <option value="false">Inativo</option>
+                                </select>
+                            </div>
+                        </form>
+                        
+                    </div>
+                </div>
+            </section>
+
+            <!-- SEÇÃO DA TABELA (READ / SEARCH / PAGINATION) -->
+            <section class="mt-4">
+                <div class="row align-items-center mb-4">
+                    <div class="col-12 col-md-auto">
+                        <h3 class="text-white mb-0 fw-bold d-inline-block align-middle me-2">Cargos Cadastrados</h3>
+                        <span class="badge bg-light text-dark fw-bold px-3 py-2 fs-6 align-middle" id="total-cargos">$</span>
+                    </div>
+                
+                    <div class="col-12 col-md-5 ms-auto mt-3 mt-md-0">
+                        <div class="position-relative style-busca style-busca-cargo shadow-sm rounded">
+                            <input type="text" id="pesquisa-cargo" class="form-control w-100 ps-5 shadow-none border-0 bg-body text-body" placeholder="Buscar cargos por nome...">
+                            <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tabela-container card border-0 p-3 shadow-sm bg-body">
+                    <div class="table-responsive">
+                        <table class="tabela table table-hover align-middle mb-0 text-body">
+                            <thead class="table-light fw-bold">
+                                <tr>                                
+                                    <th>Nome</th>
+                                    <th>Situação</th>                                
+                                    <th class="text-end">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-cargos">
+                                <tr id="loading-row">
+                                    <td colspan="3" class="text-center py-4 text-muted">
+                                        ⌛ Carregando cargos...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Controles de paginação adicionados para o gerenciamento de páginas -->
+                    <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                        <button class="btn btn-sm btn-outline-secondary rounded shadow-none" id="btn-anterior-cargos" disabled>
+                            <i class="bi bi-chevron-left"></i> Anterior
+                        </button>
+                    
+                        <span class="small text-muted" id="info-paginacao-cargos">Página 1 de 1</span>
+                    
+                        <button class="btn btn-sm btn-outline-secondary rounded shadow-none" id="btn-proximo-cargos" disabled>
+                            Próximo <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- CONTENEUR PARA TOASTS DE NOTIFICAÇÃO (OPCIONAL - USADO PELO SEU SCRIPT) -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toast-cadastro" class="toast align-items-center text-white border-0 shadow" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center gap-2">
+                    <span id="toast-mensagem-icone"></span>
+                    <span id="toast-mensagem-texto"></span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function toggleSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    
+        if (isMobile) {
+            sidebar.classList.toggle('mobile-open');
+            sidebar.classList.add('collapsed');
+            return;
+        }
+    
+        sidebar.classList.remove('mobile-open');
+        sidebar.classList.toggle('collapsed');
+    }
+    
+    function initSidebarMobile() {
+        const sidebar = document.querySelector('.sidebar');
+        if (!sidebar) return;
+    
+        if (window.matchMedia('(max-width: 768px)').matches) {
+            sidebar.classList.add('collapsed');
+            sidebar.classList.remove('mobile-open');
+        } else {
+            sidebar.classList.remove('mobile-open');
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', initSidebarMobile);
+    window.addEventListener('resize', initSidebarMobile);
+    </script>
+
+    <script>
+    (async function inicializarPerfilSidebar() {
+        const BASE_API = "https://sistema.qcsoftware.com.br";
+
+        // 1. Pega os dados guardados no login
+        let usuarioSalvo = null;
+        try {
+            const sessao = sessionStorage.getItem("qc_user");
+            if (sessao) {
+                usuarioSalvo = JSON.parse(sessao);
+            }
+        } catch (e) {
+            console.error("Erro ao ler sessionStorage:", e);
+        }
+
+        const elNome = document.getElementById("usuario-nome");
+        const elPerfil = document.getElementById("usuario-perfis");
+
+        // Se não houver sessão, redireciona para o login
+        if (!usuarioSalvo) {
+            window.location.href = "login.html";
+            return;
+        }
+
+        // Exibe o login do usuário retornado no login/sessão
+        const nomeUsuario = usuarioSalvo.usuario || usuarioSalvo.login || usuarioSalvo.nome || "";
+        if (elNome) {
+            elNome.innerText = `Usuário: ${nomeUsuario}`;
+        }
+
+        // 2. Busca o nome do Perfil diretamente na API
+        let nomePerfil = usuarioSalvo.perfil || usuarioSalvo.nome_perfil;
+        const idPerfil = usuarioSalvo.id_perfis || usuarioSalvo.id_perfil;
+
+        // Se tiver o ID do perfil, faz a busca na API `/perfis/`
+        if (idPerfil) {
+            try {
+                const res = await fetch(`${BASE_API}/perfis/`);
+                if (res.ok) {
+                    const listaPerfis = await res.json();
+                    
+                    // Procura na lista pelo perfil com o id correspondente
+                    const perfilEncontrado = listaPerfis.find(p => 
+                        Number(p.id_perfis) === Number(idPerfil) || 
+                        Number(p.id) === Number(idPerfil)
+                    );
+
+                    if (perfilEncontrado && perfilEncontrado.nome) {
+                        nomePerfil = perfilEncontrado.nome;
+                    }
+                }
+            } catch (err) {
+                console.warn("Não foi possível carregar o perfil via API:", err);
+            }
+        }
+
+        // 3. Renderiza o perfil na tela se o nome for encontrado
+        if (elPerfil) {
+            elPerfil.innerText = nomePerfil ? `Perfil: ${nomePerfil}` : "Perfil: --";
+        }
+    })();
+
+    // Função de Logout
+    function sairDoSistema() {
+        sessionStorage.clear();
+        window.location.href = "login.html";
+    }
+
+</script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/telas/script.js"></script>
+</body>
+</html>

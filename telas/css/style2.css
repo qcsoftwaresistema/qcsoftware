@@ -1,0 +1,540 @@
+@import url('https://fonts.googleapis.com/css?family=Roboto:400,500,700,900&display=swap');
+
+:root {
+    --sidebar-width: 280px;
+    --sidebar-width-collapsed: 130px;
+    --menu-lateral-claro: #E2E2E4; /* Cinza claro */
+    --menu-lateral-escuro: #828082; /* Cinza escuro */
+    --laranja: #FF6B35; 
+    --verde: #2E933C; 
+    --vermelho: #D64933; 
+    --amarelo: #F0C808; 
+    --branco: #FFFFFF; 
+    --fundo: #F4F6F9; 
+    --borda: #DEE2E6; 
+    --texto: #000; 
+    --cinza: #6C757D; 
+    --fundotela: #1d3151; /* Azul de fundo */
+    --verdeciano1: #7AF6EE; 
+    --verdeciano2: #EAFFFE; 
+}
+
+/* ==========================================================================
+   ESTILOS GERAIS
+   ========================================================================== */
+* {
+    font-family: 'Roboto', sans-serif;
+    box-sizing: border-box !important; 
+}
+
+body {
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+}
+
+/* ==========================================================================
+   SIDEBAR (PADRÃO ABERTA)
+   ========================================================================== */
+.sidebar {
+    width: var(--sidebar-width);
+    height: 100vh !important;
+    min-height: 100vh !important;
+    background: linear-gradient(180deg, var(--menu-lateral-claro), var(--menu-lateral-escuro));
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 1000 !important; 
+    overflow: hidden !important; 
+}
+
+/* Elementos Internos da Sidebar */
+.logo {
+    display: flex !important;
+    justify-content: center !important; 
+    align-items: center !important;     
+    width: 100% !important;             
+    padding: 20px !important;           
+}
+
+.logo img {
+    display: block !important;
+    width: 110px !important;             
+    height: 110px !important;            
+    object-fit: contain !important;     
+}
+
+.logo-text {
+    background: linear-gradient(45deg, #6b8cff, #8b9fff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-link {
+    color: var(--texto);
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    margin: 0.1px 16px;
+    white-space: nowrap;
+    overflow: hidden;    
+    text-decoration: none;
+}
+
+.p-3 {
+    padding: 0.8rem !important;
+}
+
+.sidebar-link:hover {
+    color: #ffffff;
+    background: var(--verdeciano1);
+    transform: translateX(5px);
+}
+
+.sidebar-link.active {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Textos e Ícones dentro da Sidebar */
+.sidebar-texto {
+    font-size: 1.5rem; 
+    display: inline-block;   
+    background: var(--texto);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-fill-color: transparent;
+    color: var(--verdeciano1); 
+}
+
+span.sidebar-texto {
+    font-family: 'Roboto', sans-serif;
+    font-weight: 700; 
+}
+
+i.sidebar-texto {
+    font-weight: 900; 
+}
+
+.sidebar-texto2 {
+    font-size: 28px; 
+    font-weight: 800;
+    display: inline-block;   
+    color: var(--verdeciano1);
+}
+
+.notification-badge {
+    background: #ff6b6b;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    color: #fff;
+}
+
+/* Seção do Perfil (Rodapé da Sidebar) */
+.profile-section {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 15px; 
+    position: absolute !important;
+    bottom: 0 !important;   
+    left: 0 !important;    
+    width: 100% !important; 
+    background: transparent !important; 
+}
+
+.profile-info {
+    transition: opacity 0.2s ease;
+}
+
+/* Botão de Toggle (Gatilho) */
+.toggle-btn {
+    position: absolute;
+    right: -10px;
+    top: 120px;
+    background: white;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    border: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+/* ==========================================================================
+   COMPORTAMENTO DA SIDEBAR QUANDO FECHADA (COLLAPSED)
+   ========================================================================== */
+.sidebar.collapsed {
+    width: var(--sidebar-width-collapsed);
+}
+
+/* Rotaciona a seta suavemente quando a sidebar estiver minimizada */
+.sidebar-toggle-btn {
+    transition: transform 0.3s ease;
+}
+.sidebar-toggle-btn.rotated {
+    transform: rotate(180deg);
+}
+
+.sidebar.collapsed span.sidebar-texto,
+.sidebar.collapsed .hide-on-collapse,
+.sidebar.collapsed .logo-text,
+.sidebar.collapsed .profile-info {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+.sidebar.collapsed i.sidebar-texto {
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+}
+
+.sidebar.collapsed .sidebar-link {
+    text-align: center;
+    padding: 0.8rem !important;
+    margin: 0.1px 8px;
+}
+
+.sidebar.collapsed .sidebar-link i {
+    margin: 0 !important;
+}
+
+/* ==========================================================================
+   CONTEÚDO PRINCIPAL (MAIN CONTENT)
+   ========================================================================== */
+.main-content {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: var(--sidebar-width) !important; 
+    width: calc(100vw - var(--sidebar-width)) !important; 
+    background-color: var(--fundotela) !important; 
+    min-height: 100vh !important; 
+    padding: 20px !important;
+    margin: 0 !important; 
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important; 
+}
+
+/* Movimento do Conteúdo quando a Sidebar fecha */
+.sidebar.collapsed ~ .main-content {
+    left: var(--sidebar-width-collapsed) !important; 
+    width: calc(100vw - var(--sidebar-width-collapsed)) !important; 
+}
+
+/* ==========================================================================
+   ELEMENTOS DO PAINEL / DASHBOARD
+   ========================================================================== */
+
+/* Filtros Superiores */
+.filter-dashboard-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 20px;
+    width: 100%;
+    padding: 15px 0px;
+    margin-bottom: 25px;
+}
+
+.filter-group-right {
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+    margin-left: auto;
+}
+
+.filter-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.input-field-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.select-industrial-custom {
+    background-color: #171a35;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 16px;
+    min-width: 140px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='white'><path d='M0 3h10L5 8z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
+
+.calendar-input-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.icon-calendar {
+    position: absolute;
+    left: 14px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 16px;
+}
+
+.input-date-native {
+    background-color: #171a35;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 10px 14px 10px 36px;
+    font-size: 16px;
+    width: 280px;
+    outline: none;
+}
+
+.btn-search-industrial {
+    background-color: #00a859;
+    color: #ffffff;
+    border: none;
+    border-radius: 20px;
+    padding: 10px 24px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+    height: 42px;
+}
+
+/* Card Branco de Informações */
+.table-info-card-white {
+    background-color: var(--branco) !important;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.table-card-title-dark {
+    color: #1d3151;
+}
+
+/* Tabelas */
+.qc-table-display-dark, .tabela {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.qc-table-display-dark th, .tabela th {
+    font-size: 15px;
+    font-weight: 600;
+    color: #4a5568;
+    padding: 14px;
+    border-bottom: 2px solid #e2e8f0;
+    background-color: #f7fafc;
+}
+
+.qc-table-display-dark td, .tabela td {
+    padding: 16px 14px;
+    font-size: 15px;
+    color: #2d3748;
+    border-bottom: 1px solid #edf2f7;
+    vertical-align: middle;
+}
+
+.tabela tr:hover td {
+    background-color: rgba(255, 107, 53, 0.04);
+}
+
+.tabela-container {
+    overflow-x: auto;
+    background: var(--branco);
+    border-radius: 10px;
+    border: 1px solid var(--borda);
+}
+
+.text-truncate {
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Badges de Status */
+.badge-status {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.status-concluido { background-color: rgba(0, 168, 89, 0.12); color: #008744; border: 1px solid rgba(0, 168, 89, 0.2); }
+.status-analise { background-color: #edf2f7; color: #4a5568; border: 1px solid #cbd5e0; }
+.status-pendente { background-color: rgba(224, 49, 49, 0.1); color: #e03131; border: 1px solid rgba(224, 49, 49, 0.2); }
+
+/* Botões de Ação */
+.action-buttons-group { display: flex; gap: 12px; }
+.action-btn { background: none; border: none; font-size: 16px; cursor: pointer; }
+.btn-edit-dark { color: #4a5568; }
+.btn-delete { color: #e03131; }
+.btn-photo-dark { color: #4a5568; }
+
+/* Paginação e Rodapé */
+.pagination-footer-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 30px;
+    padding-top: 20px;
+}
+
+.nav-page-btn { background: none; border: none; color: #ffffff; font-size: 16px; font-weight: 500; cursor: pointer; }
+.nav-page-btn:hover { color: var(--verdeciano1); }
+
+.current-page-badge {
+    background: linear-gradient(180deg, #ffffff 0%, #a1a1a1 100%);
+    color: #000000;
+    font-weight: 700;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 16px;
+}
+
+.copyright-system-tag { text-align: center; font-size: 14px; color: rgba(255, 255, 255, 0.4); margin-top: 40px; }
+.version-tag { font-weight: 600; }
+.mensagem-tabela { padding: 40px; color: var(--cinza); }
+
+/* Utilitários */
+.centralizado, .text-center {
+    text-align: center;
+}
+
+/* ==========================================================================
+   SIDEBAR EM DISPOSITIVOS MOBILE (CORRIGIDO)
+   ========================================================================== */
+@media (max-width: 768px) {
+    /* Estado Padrão no Mobile: Apenas Ícones */
+    .sidebar {
+        width: var(--sidebar-width-collapsed) !important;
+        left: 0 !important;
+        transition: width 0.3s ease !important;
+    }
+
+    /* Estado Expandido no Mobile (Quando clicar no botão) */
+    .sidebar.mobile-expanded {
+        width: var(--sidebar-width) !important; /* Abre no tamanho total */
+        box-shadow: 4px 0 16px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Esconde textos por padrão no mobile */
+    .sidebar:not(.mobile-expanded) span.sidebar-texto,
+    .sidebar:not(.mobile-expanded) .hide-on-collapse,
+    .sidebar:not(.mobile-expanded) .logo-text,
+    .sidebar:not(.mobile-expanded) .profile-info {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+    }
+
+    /* Mostra os textos quando expandido */
+    .sidebar.mobile-expanded span.sidebar-texto,
+    .sidebar.mobile-expanded .logo-text,
+    .sidebar.mobile-expanded .profile-info {
+        display: inline-block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+
+    /* Ajuste da Logo baseado no estado do menu */
+    .sidebar:not(.mobile-expanded) .logo img {
+        width: 50px !important;
+        height: 50px !important;
+    }
+    .sidebar.mobile-expanded .logo img {
+        width: 110px !important;
+        height: 110px !important;
+    }
+
+    /* Alinhamento dos links */
+    .sidebar:not(.mobile-expanded) .sidebar-link {
+        text-align: center;
+        padding: 1rem !important;
+        margin: 4px 8px;
+    }
+    .sidebar:not(.mobile-expanded) .sidebar-link i {
+        margin: 0 !important;
+    }
+
+    /* Posicionamento do Botão Toggle no Mobile */
+    .toggle-btn {
+        display: block !important;
+        position: fixed !important;
+        top: 20px !important;
+        /* Fica logo após a barra de ícones */
+        left: calc(var(--sidebar-width-collapsed) - 16px) !important; 
+        z-index: 1001 !important;
+        transition: left 0.3s ease, transform 0.3s ease !important;
+    }
+
+    /* Move o botão junto quando a barra expandir */
+    .sidebar.mobile-expanded ~ .toggle-btn {
+        left: calc(var(--sidebar-width) - 16px) !important;
+        transform: rotate(180deg) !important;
+    }
+
+    /* Ajuste do Conteúdo Principal para não ser cortado */
+    .sidebar ~ .main-content {
+        left: var(--sidebar-width-collapsed) !important;
+        width: calc(100vw - var(--sidebar-width-collapsed)) !important;
+        padding: 15px !important;
+        transition: left 0.3s ease, width 0.3s ease !important;
+    }
+
+    /* Se o menu expandir, empurra levemente ou cobre o conteúdo */
+    .sidebar.mobile-expanded ~ .main-content {
+        /* Se preferir que o menu cubra o app sem empurrar o layout, 
+           comente as duas linhas abaixo */
+        left: var(--sidebar-width) !important;
+        width: calc(100vw - var(--sidebar-width)) !important;
+    }
+}
+
+@media print {
+    /* Esconde todos os elementos da tela de listagem */
+    body * {
+        visibility: hidden !important;
+    }
+
+    /* Exibe apenas o relatório oficial padronizado */
+    #relatorio-print-container,
+    #relatorio-print-container * {
+        visibility: visible !important;
+    }
+
+    #relatorio-print-container {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+    }
+}

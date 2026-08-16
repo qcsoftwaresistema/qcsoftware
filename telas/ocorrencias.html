@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q.C Software - Relatório de Não Conformidades</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-body-tertiary text-body">
+
+    <div class="d-flex">
+        <nav id="sidebar" class="sidebar d-flex flex-column flex-shrink-0 position-fixed">
+            <button class="toggle-btn" onclick="toggleSidebar()">
+                <i id="toggle-icon" class="fas fa-chevron-left"></i>
+            </button>
+
+            <div class="logo" style="display: flex !important; justify-content: center !important; align-items: center !important; width: 100% !important; padding: 15px !important; box-sizing: border-box !important;">
+                <img src="imagens/logo.png" alt="Logo" style="display: block !important; width: 85px !important; height: 85px !important; object-fit: contain !important;">
+            </div>
+
+            <div class="nav flex-column">
+                
+                <a href="/telas/dashboard.html" class="sidebar-link text-decoration-none p-3" target="_blank" rel="noopener noreferrer">
+                    <i class="sidebar-texto fa-solid fa-chart-line"></i>
+                    <span class="sidebar-texto">Dashboard</span>
+                </a> 
+                
+                <a href="/telas/produtos.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fas fa-box me-3"></i>
+                    <span class="sidebar-texto">Produtos</span>
+                </a> 
+                
+                 <a href="/telas/maquinas.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fas fa-industry me-2"></i>
+                    <span class="sidebar-texto">Máquinas</span>
+                </a>  
+
+                 <a href="/telas/cargos.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fa fa-address-card me-2"></i>
+                    <span class="sidebar-texto">Cargos</span>
+                </a>
+
+                <a href="/telas/colaboradores.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fa fa-user me-2"></i>
+                    <span class="sidebar-texto">Colaboradores</span>
+                </a>
+
+                <a href="/telas/monitoramento.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fa-solid fa-list-check me-2"></i>
+                    <span class="sidebar-texto">Monitoramento</span>
+                </a>
+
+                <a href="https://mapamaquinas.qcsoftware.com.br" class="sidebar-link text-decoration-none p-3" target="_blank" rel="noopener noreferrer">
+                    <i class="sidebar-texto fas fa-map-location-dot me-2"></i>
+                    <span class="sidebar-texto">Mapa/Máquinas</span>
+                </a>
+
+<div class="profile-section mt-auto" style="background: transparent; width: 100%; padding: 12px 15px; box-sizing: border-box;">
+    <div class="d-flex p-0 text-start w-100">
+        <div class="profile-info w-100">
+            
+            <div class="d-flex align-items-center justify-content-between gap-2" style="margin-bottom: 6px; line-height: 1.1;">
+                <div class="fw-bold text-truncate" id="usuario-nome" style="color: #ffffff; font-size: 0.8rem;" title="Carregando...">
+                    Usuário: Carregando...
+                </div>
+                <button type="button" class="btn btn-danger btn-sm px-2 py-0 d-inline-flex align-items-center justify-content-center gap-1 shadow-sm flex-shrink-0" onclick="sairDoSistema()" style="font-size: 0.7rem; border-radius: 4px; height: 20px;">
+                    <i class="fa-solid fa-right-from-bracket"></i> Sair
+                </button>
+            </div>
+
+            <div class="text-truncate" id="usuario-perfis" style="color: #ffffff; font-size: 0.8rem; margin-bottom: 6px; line-height: 1;">
+                Perfil: Carregando...
+            </div>
+
+            <div style="color: #ffffff; font-size: 0.8rem; margin-bottom: 6px; line-height: 1;">
+                Data: <span id="data-brasilia">--/--/----</span>
+            </div>
+
+            <div style="color: #ffffff; font-size: 0.8rem; margin-bottom: 8px; line-height: 1;">
+                Hora: <span id="hora-brasilia">--:--</span>
+            </div>
+
+            <div class="fw-bold border-top pt-2" style="color: rgba(255, 255, 255, 0.7); font-size: 0.7rem; line-height: 1.1; border-color: rgba(255, 255, 255, 0.15) !important;">
+                © Q.C Software - versão 1.0
+            </div>                  
+        </div>
+    </div>
+</div>
+</div>
+        </nav>
+
+        <main class="main-content">
+            <div class="container-fluid mb-4">
+                <i class="sidebar-texto2 fa-solid fa-triangle-exclamation me-3 fw-bold"></i>
+                <span class="sidebar-texto2 fw-bold">Relatório de Não Conformidades (NFC's)</span>
+            </div>
+        
+            <section class="mb-4">            
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card shadow-sm p-4 border-0 bg-body">
+
+                            <div class="d-block w-100 text-end mt-2">
+                                <button type="submit"
+                                        form="formOcorrencias"
+                                        class="btn btn-success btn-sm py-1 px-3 fw-bold d-inline-flex align-items-center"
+                                        style="font-size: 0.95rem;">
+                                    <i class="bi bi-floppy me-2"></i> Salvar
+                                </button>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h4 class="mb-0 fw-bold text-body" id="titulo-form-colab">
+                                    <i class="sidebar-texto fa-solid fa-triangle-exclamation me-3"></i> Ocorrência
+                                </h4>
+                                <small class="text-muted d-block">
+                                    <span class="text-danger fw-bold">*</span> Todos os campos obrigatórios. O campo Foto é opcional a inclusão.
+                                </small>                            
+                            </div>
+                            
+                            <form id="formOcorrencias" class="row g-3 align-items-end">
+                                <input type="hidden" id="ocorrencias-id">
+                                
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold text-body">Número</label>
+                                    <input type="text" 
+                                        inputmode="numeric" 
+                                        pattern="[0-9]*" 
+                                        id="ocorrencias-numero" 
+                                        class="form-control bg-body text-body shadow-none" 
+                                        placeholder="Digite o número da ocorrência..."
+                                        oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold text-body">Data</label>
+                                    <input type="datetime-local" 
+                                        id="ocorrencias-data" 
+                                        class="form-control bg-light text-muted shadow-none" 
+                                        readonly>
+                                </div>
+                
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold text-body">Máquina</label>                     
+                                    <input type="text" 
+                                           class="form-select bg-body text-body shadow-none" 
+                                           id="maquinas-nome-busca" 
+                                           list="lista-maquinas-datalist"
+                                           placeholder="Selecione a máquina..." 
+                                           autocomplete="off"
+                                           required>                            
+                                    <datalist id="lista-maquinas-datalist"></datalist>                            
+                                    <input type="hidden" id="maquinas-nome" name="id_maquinas">
+                                </div>
+                                
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold text-body">Colaborador</label>
+                                    <input type="text" 
+                                           class="form-select bg-body text-body shadow-none" 
+                                           id="colaboradores-nome-busca" 
+                                           list="lista-colaboradores-datalist"
+                                           placeholder="Selecione o colaborador..." 
+                                           autocomplete="off"
+                                           required>                            
+                                    <datalist id="lista-colaboradores-datalist"></datalist>                            
+                                    <input type="hidden" id="colaboradores-nome" name="id_colaboradores">
+                                </div>
+                                
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold text-body">Produto</label>                         
+                                    <input type="text" 
+                                           class="form-select bg-body text-body shadow-none" 
+                                           id="produtos-nome-busca" 
+                                           list="lista-produtos-datalist"
+                                           placeholder="Selecione o produto..." 
+                                           autocomplete="off"
+                                           required>                            
+                                    <datalist id="lista-produtos-datalist"></datalist>                            
+                                    <input type="hidden" id="produtos-nome" name="id_produtos">
+                                </div>
+        
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold text-body">Lote do Produto</label>
+                                    <input type="text" 
+                                        inputmode="numeric" 
+                                        pattern="[0-9]*" 
+                                        id="ocorrencias-lote-produto" 
+                                        class="form-control bg-body text-body shadow-none" 
+                                        placeholder="Digite o lote do produto..."
+                                        oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                                </div>
+        
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold text-body">Número da Nota Fiscal</label>
+                                    <input type="text" 
+                                        inputmode="numeric" 
+                                        pattern="[0-9]*" 
+                                        id="ocorrencias-numero-nota-fiscal" 
+                                        class="form-control bg-body text-body shadow-none" 
+                                        placeholder="Digite o número da nota fiscal..."
+                                        oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                                </div>
+        
+                                <div class="col-12 mt-4">
+                                    <h4 class="mb-0 fw-bold text-body" id="titulo-ocorrencias-problema">
+                                        <i class="sidebar-texto fa-solid fa-file-circle-exclamation me-3"></i> Descrição dos Problemas e Falhas
+                                    </h4>
+                                </div>
+        
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-body">Problema</label>
+                                    <textarea id="ocorrencias-problema" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite a descrição do problema..."></textarea>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-body">Onde ocorreu a falha?</label>
+                                    <textarea id="ocorrencias-falha-onde" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite onde ocorreu a falha..."></textarea>
+                                </div>
+        
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-body">Como ocorreu a falha?</label>
+                                    <textarea id="ocorrencias-falha-como" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite como ocorreu a falha..."></textarea>
+                                </div>
+        
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-body">Quando ocorreu a falha?</label>
+                                    <textarea id="ocorrencias-falha-quando" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite quando ocorreu a falha..."></textarea>
+                                </div>
+        
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-body">Quem estava envolvido na falha?</label>
+                                    <textarea id="ocorrencias-falha-quem" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite quem estava envolvido na falha..."></textarea>
+                                </div>
+        
+                                <div class="col-12 mt-4">
+                                    <h4 class="mb-0 fw-bold text-body" id="titulo-form-ocorrencias">
+                                        <i class="sidebar-texto fa-solid fa-screwdriver-wrench me-3"></i> Ação e Situação
+                                    </h4>
+                                </div>
+        
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold text-body">Observações</label>
+                                    <textarea id="ocorrencias-observacoes" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Observações adicionais..."></textarea>
+                                </div>
+        
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold text-body">Ações Corretivas</label>
+                                    <textarea id="ocorrencias-acao-corretiva" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite as ações corretivas..."></textarea>
+                                </div>
+        
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold text-body">Data/Prazo para Resolução</label>
+                                    <input type="date" id="ocorrencias-data-prazo" class="form-control bg-body text-body shadow-none pt-1 pb-5" style="height: 80px;">
+                                </div>   
+                                
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-body">
+                                        <i class="sidebar-texto fa-solid fa-camera me-1"></i> Foto
+                                    </label>
+                                    
+                                    <div id="dropzone-foto" 
+                                         class="position-relative d-flex flex-column align-items-center justify-content-center p-3 border border-2 border-dashed rounded-3 bg-body" 
+                                         style="min-height: 120px; border-style: dashed !important; cursor: pointer;">
+                                        
+                                        <div id="preview-container" class="d-none text-center mb-2 position-relative">
+                                            <img id="foto-preview" src="" alt="Preview" class="img-thumbnail rounded shadow-sm" style="max-height: 90px; object-fit: contain;">
+                                            <button type="button" class="btn btn-danger btn-sm position-absolute top-0 start-100 translate-middle rounded-circle p-1" 
+                                                    id="btn-remover-foto" title="Remover foto" style="width: 24px; height: 24px; font-size: 10px; line-height: 1;">
+                                                <i class="fa-solid fa-xmark"></i>
+                                            </button>
+                                        </div>
+                                
+                                        <div id="upload-instrucoes" class="text-center text-muted">
+                                            <i class="fa-solid fa-cloud-arrow-up fa-2x mb-2 text-secondary"></i>
+                                            <p class="mb-0 small fw-medium">Clique/Toque para usar a Câmera ou arraste o arquivo aqui</p>
+                                            <span class="text-xs text-secondary" style="font-size: 11px;">Formatos aceitos: JPG, JPEG ou PNG (Máx. 5MB)</span>
+                                        </div>
+                                
+                                        <input type="file" 
+                                               id="ocorrencias-foto-ocorrencia"
+                                               class="d-none" 
+                                               accept="image/*" capture="environment">
+                                    </div>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold text-body">Situação</label>
+                                    <select id="ocorrencias-situacao" class="form-select bg-body text-body shadow-none">
+                                        <option value="Pendente">Pendente</option>
+                                        <option value="Em andamento">Em andamento</option>
+                                        <option value="Concluído">Concluído</option>
+                                    </select>
+                                </div>
+        
+                            </form>
+                            
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+    </div>
+
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1055;">
+        <div id="toast-cadastro" class="toast hide align-items-center text-white border-0 shadow" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center gap-2">
+                    <span id="toast-mensagem-icone"></span>
+                    <span id="toast-mensagem-texto" class="fw-semibold"></span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (async function inicializarPerfilSidebar() {
+        const BASE_API = "https://sistema.qcsoftware.com.br";
+
+        // 1. Pega os dados guardados no login
+        let usuarioSalvo = null;
+        try {
+            const sessao = sessionStorage.getItem("qc_user");
+            if (sessao) {
+                usuarioSalvo = JSON.parse(sessao);
+            }
+        } catch (e) {
+            console.error("Erro ao ler sessionStorage:", e);
+        }
+
+        const elNome = document.getElementById("usuario-nome");
+        const elPerfil = document.getElementById("usuario-perfis");
+
+        // Se não houver sessão, redireciona para o login
+        if (!usuarioSalvo) {
+            window.location.href = "login.html";
+            return;
+        }
+
+        // Exibe o login do usuário retornado no login/sessão
+        const nomeUsuario = usuarioSalvo.usuario || usuarioSalvo.login || usuarioSalvo.nome || "";
+        if (elNome) {
+            elNome.innerText = `Usuário: ${nomeUsuario}`;
+        }
+
+        // 2. Busca o nome do Perfil diretamente na API
+        let nomePerfil = usuarioSalvo.perfil || usuarioSalvo.nome_perfil;
+        const idPerfil = usuarioSalvo.id_perfis || usuarioSalvo.id_perfil;
+
+        // Se tiver o ID do perfil, faz a busca na API `/perfis/`
+        if (idPerfil) {
+            try {
+                const res = await fetch(`${BASE_API}/perfis/`);
+                if (res.ok) {
+                    const listaPerfis = await res.json();
+                    
+                    // Procura na lista pelo perfil com o id correspondente
+                    const perfilEncontrado = listaPerfis.find(p => 
+                        Number(p.id_perfis) === Number(idPerfil) || 
+                        Number(p.id) === Number(idPerfil)
+                    );
+
+                    if (perfilEncontrado && perfilEncontrado.nome) {
+                        nomePerfil = perfilEncontrado.nome;
+                    }
+                }
+            } catch (err) {
+                console.warn("Não foi possível carregar o perfil via API:", err);
+            }
+        }
+
+        // 3. Renderiza o perfil na tela se o nome for encontrado
+        if (elPerfil) {
+            elPerfil.innerText = nomePerfil ? `Perfil: ${nomePerfil}` : "Perfil: --";
+        }
+    })();
+
+    // Função de Logout
+    function sairDoSistema() {
+        sessionStorage.clear();
+        window.location.href = "login.html";
+    }
+</script>
+
+    <script>
+            function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const isMobile = window.matchMedia('(max-width: 768px)').matches;
+        
+            if (isMobile) {
+                sidebar.classList.toggle('mobile-open');
+                sidebar.classList.add('collapsed');
+                return;
+            }
+        
+            sidebar.classList.remove('mobile-open');
+            sidebar.classList.toggle('collapsed');
+        }
+        
+        function initSidebarMobile() {
+            const sidebar = document.querySelector('.sidebar');
+            if (!sidebar) return;
+        
+            if (window.matchMedia('(max-width: 768px)').matches) {
+                sidebar.classList.add('collapsed');
+                sidebar.classList.remove('mobile-open');
+            } else {
+                sidebar.classList.remove('mobile-open');
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', initSidebarMobile);
+        window.addEventListener('resize', initSidebarMobile);
+    </script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const campoData = document.getElementById('ocorrencias-data');
+            if (campoData) {
+                const agora = new Date();
+                
+                const ano = agora.getFullYear();
+                const mes = String(agora.getMonth() + 1).padStart(2, '0');
+                const dia = String(agora.getDate()).padStart(2, '0');
+                const horas = String(agora.getHours()).padStart(2, '0');
+                const minutos = String(agora.getMinutes()).padStart(2, '0');
+                
+                campoData.value = `${ano}-${mes}-${dia}T${horas}:${minutos}`;
+            }
+        });
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/telas/ocorrencias.js"></script>
+
+    <div id="toastConfirmacao" class="position-fixed top-50 start-50 translate-middle d-none" style="z-index: 1090; width: 90%; max-width: 400px;">
+        <div class="card shadow-lg border-0 text-center p-4">
+            <div class="mb-3 text-success">
+                <i class="bi bi-check-circle-fill display-4"></i>
+            </div>
+            <h5 class="fw-bold text-body">Ocorrência Salva!</h5>
+            <p class="text-muted small mb-4">Deseja imprimir o relatório?</p>
+            
+            <div class="d-flex justify-content-center gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm px-3 fw-bold" onclick="fecharToastImpressao()">
+                    Não
+                </button>
+                <button type="button" class="btn btn-success btn-sm px-4 fw-bold" onclick="confirmarEImprimir()">
+                    <i class="bi bi-printer me-1"></i> Sim
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastBackdrop" class="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-none" style="z-index: 1085;"></div>
+
+    <div id="relatorio-impressao-a4" class="d-none-screen">
+        <div class="relatorio-header">
+            <div class="relatorio-logo">
+                <img src="imagens/logo.png" alt="Logo Empresa">
+            </div>
+            <div class="relatorio-titulo-empresa">
+                <h2>Relatório de Não Conformidades</h2>
+                <p>Q.C Software - Agilidade que gera resultados!</p>
+            </div>
+            <div class="relatorio-meta-doc">
+                <div><strong>Ocorrência Nº:</strong> <span id="print-numero">000</span></div>
+                <div><strong>Emissão:</strong> <span id="print-data">--/--/----</span></div>
+                <div><strong>Usuário:</strong> <span id="print-usuario">--/--/----</span></div>
+            </div>
+        </div>
+
+        <div class="relatorio-secao-titulo">1. NÃO CONFORMIDADE</div>
+        <div class="relatorio-secao-1-container">
+
+            <table class="relatorio-tabela tabla-info">
+                <tr>
+                    <td style="width: 50%;"><strong>Máquina:</strong> <span id="print-maquina">--</span></td>
+                    <td style="width: 50%;"><strong>Colaborador:</strong> <span id="print-colaborador">--</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Produto:</strong> <span id="print-produto">--</span></td>
+                    <td><strong>Lote do Produto:</strong> <span id="print-lote">--</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Número da Nota Fiscal:</strong> <span id="print-nf">--</span></td>
+                    <td><strong>Data da Ocorrência:</strong> <span id="print-data-ocorrencia">--</span></td>
+                </tr>
+                <tr>
+                    <td colspan="2"><strong>Situação:</strong> <span id="print-situacao">--</span></td>
+                </tr>
+            </table>
+
+            <div class="relatorio-foto-box">
+                <img id="print-foto-img" src="" alt="Foto Ocorrência" class="d-none">
+                <div id="print-foto-placeholder" class="foto-placeholder">Sem Foto</div>
+            </div>
+        </div>
+
+        <div class="relatorio-secao-titulo">2. DESCRIÇÃO DOS PROBLEMAS E FALHAS (5W2H)</div>
+        <div class="relatorio-bloco-texto">
+            <div class="relatorio-campo"><strong>Descrição do Problema:</strong></div>
+            <div id="print-problema" class="relatorio-conteudo-box">--</div>
+        </div>
+
+        <table class="relatorio-tabela margin-top-10">
+            <tr>
+                <td style="width: 50%;"><strong>Onde ocorreu?</strong><br><span id="print-falha-onde">--</span></td>
+                <td style="width: 50%;"><strong>Como ocorreu?</strong><br><span id="print-falha-como">--</span></td>
+            </tr>
+            <tr>
+                <td><strong>Quando ocorreu?</strong><br><span id="print-falha-quando">--</span></td>
+                <td><strong>Quem estava envolvido?</strong><br><span id="print-falha-quem">--</span></td>
+            </tr>
+        </table>
+
+        <div class="relatorio-secao-titulo">3. AÇÃO E SITUAÇÃO</div>
+        <div class="relatorio-bloco-texto">
+            <div class="relatorio-campo"><strong>Ações Corretivas:</strong></div>
+            <div id="print-acao-corretiva" class="relatorio-conteudo-box">--</div>
+        </div>
+
+        <div class="relatorio-bloco-texto margin-top-10">
+            <div class="relatorio-campo"><strong>Observações:</strong></div>
+            <div id="print-observacoes" class="relatorio-conteudo-box">--</div>
+        </div>
+
+        <table class="relatorio-tabela margin-top-10">
+            <tr>
+                <td><strong>Data/Prazo para resolução:</strong> <span id="print-prazo">--/--/----</span></td>
+            </tr>
+        </table>
+
+        <div class="relatorio-assinaturas">
+            <div class="assinatura-box">
+                <div class="linha-assinatura"></div>
+                <p>
+                    <strong>Responsável</strong><br>
+                    <span id="print-colaborador-assinatura">Colaborador Q.C Software</span>
+                </p>
+            </div>
+            <div class="assinatura-box">
+                <div class="linha-assinatura"></div>
+                <p>
+                    <strong>Qualidade</strong><br>
+                    Q.C Software
+                </p>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

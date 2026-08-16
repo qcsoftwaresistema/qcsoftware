@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q.C Software - Listagem de Não Conformidades</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style2.css">
+
+    <script>
+    // VERIFICAÇÃO DE AUTENTICAÇÃO (PROTEÇÃO DE ROTA)
+    (function verificarAutenticacao() {
+        const usuarioLogado = sessionStorage.getItem("qc_user");
+
+        if (!usuarioLogado) {
+            console.warn("⛔ Acesso não autorizado! Redirecionando para a tela de login...");
+            // Redireciona imediatamente para a tela de login
+            window.location.href = "login.html"; // ou "/telas/login.html" / "login.html" conforme a estrutura de pastas
+        }
+    })();
+</script>
+
+</head>
+<body class="bg-body-tertiary text-body">
+
+    <div class="d-flex">
+        <nav id="sidebar" class="sidebar d-flex flex-column flex-shrink-0 position-fixed">
+            <button class="toggle-btn" onclick="toggleSidebar()">
+                <i id="toggle-icon" class="fas fa-chevron-left"></i>
+            </button>
+
+            <div class="logo" style="display: flex !important; justify-content: center !important; align-items: center !important; width: 100% !important; padding: 15px !important; box-sizing: border-box !important;">
+                <img src="imagens/logo.png" alt="Logo" style="display: block !important; width: 85px !important; height: 85px !important; object-fit: contain !important;">
+            </div>
+
+            <div class="nav flex-column">
+                
+                <a href="/telas/dashboard.html" class="sidebar-link text-decoration-none p-3" target="_blank" rel="noopener noreferrer">
+                    <i class="sidebar-texto fa-solid fa-chart-line"></i>
+                    <span class="sidebar-texto">Dashboard</span>
+                </a> 
+                
+                <a href="/telas/produtos.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fas fa-box me-3"></i>
+                    <span class="sidebar-texto">Produtos</span>
+                </a> 
+                
+                 <a href="/telas/maquinas.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fas fa-industry me-2"></i>
+                    <span class="sidebar-texto">Máquinas</span>
+                </a>  
+
+                 <a href="/telas/cargos.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fa fa-address-card me-2"></i>
+                    <span class="sidebar-texto">Cargos</span>
+                </a>
+
+                <a href="/telas/colaboradores.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fa fa-user me-2"></i>
+                    <span class="sidebar-texto">Colaboradores</span>
+                </a>
+
+                <a href="/telas/monitoramento.html" class="sidebar-link text-decoration-none p-3">
+                    <i class="sidebar-texto fa-solid fa-list-check me-2"></i>
+                    <span class="sidebar-texto">Monitoramento</span>
+                </a>
+
+                <a href="https://mapamaquinas.qcsoftware.com.br" class="sidebar-link text-decoration-none p-3" target="_blank" rel="noopener noreferrer">
+                <i class="sidebar-texto fas fa-map-location-dot me-2"></i>
+                <span class="sidebar-texto">Mapa/Máquinas</span>
+                </a>
+
+                <div class="profile-section mt-auto" style="background: transparent; width: 100%; padding: 12px 15px; box-sizing: border-box;">
+    <div class="d-flex p-0 text-start w-100">
+        <div class="profile-info w-100">
+            
+            <div class="d-flex align-items-center justify-content-between gap-2" style="margin-bottom: 6px; line-height: 1.1;">
+                <div class="fw-bold text-truncate" id="usuario-nome" style="color: #ffffff; font-size: 0.8rem;" title="Carregando...">
+                    Usuário: Carregando...
+                </div>
+                <button type="button" class="btn btn-danger btn-sm px-2 py-0 d-inline-flex align-items-center justify-content-center gap-1 shadow-sm flex-shrink-0" onclick="sairDoSistema()" style="font-size: 0.7rem; border-radius: 4px; height: 20px;">
+                    <i class="fa-solid fa-right-from-bracket"></i> Sair
+                </button>
+            </div>
+
+            <div class="text-truncate" id="usuario-perfis" style="color: #ffffff; font-size: 0.8rem; margin-bottom: 6px; line-height: 1;">
+                Perfil: Carregando...
+            </div>
+
+            <div style="color: #ffffff; font-size: 0.8rem; margin-bottom: 6px; line-height: 1;">
+                Data: <span id="data-brasilia">--/--/----</span>
+            </div>
+
+            <div style="color: #ffffff; font-size: 0.8rem; margin-bottom: 8px; line-height: 1;">
+                Hora: <span id="hora-brasilia">--:--</span>
+            </div>
+
+            <div class="fw-bold border-top pt-2" style="color: rgba(255, 255, 255, 0.7); font-size: 0.7rem; line-height: 1.1; border-color: rgba(255, 255, 255, 0.15) !important;">
+                © Q.C Software - versão 1.0
+            </div>               
+                    </div>
+                </div>
+            </div>
+        </nav>
+        
+        <main class="main-content">
+            <div class="container-fluid mb-4 p-0 d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="sidebar-texto2 fa-solid fa-triangle-exclamation me-3 fw-bold"></i>
+                    <span class="sidebar-texto2 fw-bold">Listagem de Não Conformidades (NFC's)</span>
+                </div>
+                <button onclick="prepararEImprimirRelatorio()" class="btn btn-outline-secondary">
+                    <i class="fas fa-print"></i> Imprimir Listagem
+                </button>
+            </div>
+
+<section class="filter-dashboard-bar">
+    <div class="row">
+        <div class="col-md-3 mb-3">
+            <label for="filterLote" class="form-label text-white fw-bold" style="font-family: 'Roboto', sans-serif;">Lote do Produto</label>
+            <input type="text" id="filterLote" class="form-control form-control-lg" placeholder="Digite o lote...">
+        </div>
+
+                <div class="col-md-3 mb-3">
+            <label for="filterSituacao" class="form-label text-white fw-bold" style="font-family: 'Roboto', sans-serif;">Situação</label>
+            <select id="filterSituacao" class="form-control form-control-lg">
+                <option value="todos">Todos</option>
+                <option value="Concluído">Concluído</option>
+                <option value="Em Andamento">Em Andamento</option>
+                <option value="pendente" selected>Pendente</option>
+            </select>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <label for="filterDataInicio" class="form-label text-white fw-bold" style="font-family: 'Roboto', sans-serif;">Data Início</label>
+            <input type="date" id="filterDataInicio" class="form-control form-control-lg px-2">
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <label for="filterDataFim" class="form-label text-white fw-bold" style="font-family: 'Roboto', sans-serif;">Data Fim</label>
+            <input type="date" id="filterDataFim" class="form-control form-control-lg px-2">
+        </div>
+
+        <div class="col-md-3">
+            <label for="input-reimprimir-numero" class="form-label text-white fw-bold">Digite Nº Ocorrência para imprimir</label>
+            <div class="input-group">
+                <input type="number" 
+                    id="input-reimprimir-numero" 
+                    class="form-control" 
+                    placeholder="Ex: 889">
+                <button class="btn btn-primary" 
+                        type="button" 
+                        onclick="reimprimirPorNumeroOcorrencia(document.getElementById('input-reimprimir-numero').value, event)">
+                    <i class="bi bi-printer"></i> Imprimir
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+</section>
+
+            <section class="table-info-card-white">
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <h3 class="table-card-title-dark mb-0 fw-bold">Não Conformidades Cadastradas</h3>
+        <span class="badge bg-dark text-white fw-bold px-3 py-2 fs-5" id="totalOcorrencias">0</span>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="table qc-table-display-dark align-middle" id="container-tabela-ocorrencias">
+            <thead class="table-light fw-bold">
+                <tr> 
+                    <th>Lote Produto</th>
+                    <th>Nº Ocorrência</th>
+                    <th>Data/Hora</th>
+                    <th>Produto</th>
+                    <th>Máquina</th>
+                    <th>Ocorrência</th>
+                    <th>Colaborador</th>
+                    <th>Situação</th>
+                    <th>Foto</th>                                   
+                    <th style="text-align: left; width: 120px; white-space: nowrap;">Ações</th>
+                </tr>
+            </thead>
+            <tbody id="tabela-ocorrencias"> 
+                <tr id="loading-row">
+                    <td colspan="10" class="text-center py-4 text-muted">
+                        <div class="spinner-border spinner-border-sm text-secondary me-2" role="status"></div>
+                        Carregando ocorrências...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- PAGINAÇÃO -->
+    <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+
+        <button id="btn-anterior-ocorrencias"
+            class="btn btn-sm btn-outline-secondary"
+            disabled>
+            <i class="bi bi-chevron-left"></i> Anterior
+        </button>
+
+        <span id="info-paginacao-ocorrencias"
+            class="text-muted small fw-medium">
+            Página 1 de 1
+        </span>
+
+        <button id="btn-proximo-ocorrencias"
+            class="btn btn-sm btn-outline-secondary"
+            disabled>
+            Próximo <i class="bi bi-chevron-right"></i>
+        </button>
+
+    </div>
+
+</div>
+
+</section>
+
+</main>
+
+</div>
+
+<script>
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
+    if (isMobile) {
+        sidebar.classList.toggle('mobile-open');
+        sidebar.classList.add('collapsed');
+        return;
+    }
+
+    sidebar.classList.remove('mobile-open');
+    sidebar.classList.toggle('collapsed');
+}
+
+function initSidebarMobile() {
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+
+    if (window.matchMedia('(max-width: 768px)').matches) {
+        sidebar.classList.add('collapsed');
+        sidebar.classList.remove('mobile-open');
+    } else {
+        sidebar.classList.remove('mobile-open');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', initSidebarMobile);
+window.addEventListener('resize', initSidebarMobile);
+</script>
+
+<script>
+    function prepararEImprimirRelatorio() {
+    // 1. Captura todas as linhas da tabela dentro do tbody
+    // Se a sua tabela tiver uma classe ou ID específico (ex: #tabelaOcorrencias), ajuste aqui.
+    const linhas = document.querySelectorAll("table tbody tr");
+    const dadosFiltrados = [];
+
+    linhas.forEach(linha => {
+        // Ignora linhas de carregamento ou mensagens de "Nenhum registro"
+        if (linha.querySelector(".sem-dados") || linha.innerText.includes("Nenhuma ocorrência") || linha.innerText.includes("Carregando")) {
+            return;
+        }
+
+        const colunas = linha.querySelectorAll("td");
+        
+        // Verifica se a linha tem colunas suficientes de dados
+        if (colunas.length >= 8) { 
+            // Captura o texto exato de cada célula baseado na ordem da sua tabela
+            const item = {
+                lote: colunas[0].innerText.trim(),
+                numero: colunas[1].innerText.trim(),
+                dataHora: colunas[2].innerText.trim(),
+                produto: colunas[3].innerText.trim(),
+                maquina: colunas[4].innerText.trim(),
+                ocorrencia: colunas[5].innerText.trim(),
+                colaborador: colunas[6].innerText.trim(),
+                situacao: colunas[7].innerText.trim(),
+                // Verifica se há um ícone azul de foto ativa/preenchido (fas) ou se tem imagem carregada
+                foto: colunas[8].querySelector(".fas.fa-image") || colunas[8].querySelector("img") ? true : false
+            };
+            dadosFiltrados.push(item);
+        }
+    });
+
+    // 2. Salva a lista filtrada no localStorage
+    localStorage.setItem("dadosFiltroRelatorio", JSON.stringify(dadosFiltrados));
+
+    // 3. Agora sim redireciona com segurança para a tela do relatório
+    window.location.href = "ocorrencias_relatorio.html";
+}
+</script>
+
+<script>
+    (async function inicializarPerfilSidebar() {
+        const BASE_API = "https://sistema.qcsoftware.com.br";
+
+        // 1. Pega os dados guardados no login
+        let usuarioSalvo = null;
+        try {
+            const sessao = sessionStorage.getItem("qc_user");
+            if (sessao) {
+                usuarioSalvo = JSON.parse(sessao);
+            }
+        } catch (e) {
+            console.error("Erro ao ler sessionStorage:", e);
+        }
+
+        const elNome = document.getElementById("usuario-nome");
+        const elPerfil = document.getElementById("usuario-perfis");
+
+        // Se não houver sessão, redireciona para o login
+        if (!usuarioSalvo) {
+            window.location.href = "login.html";
+            return;
+        }
+
+        // Exibe o login do usuário retornado no login/sessão
+        const nomeUsuario = usuarioSalvo.usuario || usuarioSalvo.login || usuarioSalvo.nome || "";
+        if (elNome) {
+            elNome.innerText = `Usuário: ${nomeUsuario}`;
+        }
+
+        // 2. Busca o nome do Perfil diretamente na API
+        let nomePerfil = usuarioSalvo.perfil || usuarioSalvo.nome_perfil;
+        const idPerfil = usuarioSalvo.id_perfis || usuarioSalvo.id_perfil;
+
+        // Se tiver o ID do perfil, faz a busca na API `/perfis/`
+        if (idPerfil) {
+            try {
+                const res = await fetch(`${BASE_API}/perfis/`);
+                if (res.ok) {
+                    const listaPerfis = await res.json();
+                    
+                    // Procura na lista pelo perfil com o id correspondente
+                    const perfilEncontrado = listaPerfis.find(p => 
+                        Number(p.id_perfis) === Number(idPerfil) || 
+                        Number(p.id) === Number(idPerfil)
+                    );
+
+                    if (perfilEncontrado && perfilEncontrado.nome) {
+                        nomePerfil = perfilEncontrado.nome;
+                    }
+                }
+            } catch (err) {
+                console.warn("Não foi possível carregar o perfil via API:", err);
+            }
+        }
+
+        // 3. Renderiza o perfil na tela se o nome for encontrado
+        if (elPerfil) {
+            elPerfil.innerText = nomePerfil ? `Perfil: ${nomePerfil}` : "Perfil: --";
+        }
+    })();
+
+    // Função de Logout
+    function sairDoSistema() {
+        sessionStorage.clear();
+        window.location.href = "login.html";
+    }
+
+</script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="ocorrencias1.js"></script>
+</body>
+</html>
