@@ -256,119 +256,106 @@
     </div>
 
 <script>
-    // Lista de servidores em ordem de prioridade
-    const SERVIDORES = [
-        "https://sistema.qcsoftware.com.br",
-        "https://mapamaquinas.qcsoftware.com.br"
-    ];
-    const DASHBOARD_API_URL = "/api/dashboard/status"; 
+    // Configuração dos servidores por contexto
+    const SERVIDOR_SISTEMA = "https://sistema.qcsoftware.com.br";
+    const URL_MAPAMAQUINAS_API = "https://mapamaquinas.qcsoftware.com.br/api/dashboard/status";
 
     Chart.defaults.color = '#e5e7eb';
     Chart.defaults.borderColor = 'rgba(31, 20, 69, 0.4)';
     Chart.defaults.font.size = 12;
 
     let pizzaChart, barrasChart, graficoStatusMaquina, chartSetoresInstancia, mesChart;
+    
+    // Armazenamento global
     let dadosGlobais = [];
+    let dadosMapaMaquinas = {};
 
-    // Dicionários para buscar Nomes e Setores na memória
+    // Dicionários para busca em memória
     let mapaProdutosGeral = {};
     let mapaMaquinasGeral = {};
     let mapaSetorPorIdColab = {};
     let mapaSetorPorMatriculaColab = {};
 
     document.addEventListener("DOMContentLoaded", async () => {
-        // 1. PRIMEIRO: Carrega catálogos (Produtos, Máquinas e Colaboradores)
+        // 1. Carrega catálogos do servidor do sistema
         await carregarCatalogosAuxiliares();
 
-        // 1. Executa imediatamente no carregamento inicial
-        await buscarDadosAPI(); 
-        buscarEAtualizarDashboard(); 
+        // 2. Executa as buscas iniciais em paralelo
+        await Promise.allSettled([
+            buscarDadosAPI(),
+            buscarEAtualizarDashboard()
+        ]);
 
-        // 2. Configura a atualização automática a cada 1 minuto (60.000 ms)
+        // 3. Loop de atualização a cada 1 minuto (60.000 ms)
         setInterval(async () => {
             try {
                 await buscarDadosAPI();
-                buscarEAtualizarDashboard();
+                await buscarEAtualizarDashboard();
                 console.log('Dashboard atualizada com sucesso!');
             } catch (error) {
                 console.error('Erro ao atualizar a dashboard:', error);
             }
-        }, 60000); // 60000 ms = 1 minuto
-        
-        // Loop de atualização das máquinas
-        setInterval(buscarEAtualizarDashboard, 60000); 
+        }, 60000); 
     });
 
-    // CARREGA OS CATÁLOGOS AUXILIARES
+    // CARREGA OS CATÁLOGOS AUXILIARES (Sistema)
     async function carregarCatalogosAuxiliares() {
-        if (typeof SERVIDORES === "undefined" || !SERVIDORES.length) return;
-        
-        for (const urlBase of SERVIDORES) {
-            try {
-                // Produtos
-                const resProd = await fetch(`${urlBase}/produtos`);
-                if (resProd.ok) {
-                    const produtosLista = await resProd.json();
-                    produtosLista.forEach(p => {
-                        const idKey = p.id_produtos || p.id;
-                        if (idKey) mapaProdutosGeral[String(idKey).trim()] = p.nome;
-                    });
-                }
-                
-                // Máquinas
-                const resMaq = await fetch(`${urlBase}/maquinas`);
-                if (resMaq.ok) {
-                    const maquinasLista = await resMaq.json();
-                    maquinasLista.forEach(m => {
-                        const idKey = m.id_maquinas || m.id;
-                        if (idKey) mapaMaquinasGeral[String(idKey).trim()] = m.nome;
-                    });
-                }
-
-                // Colaboradores -> Mapeia c.setor por ID, Matrícula, Nome e E-mail
-                const resColab = await fetch(`${urlBase}/colaboradores`);
-                if (resColab.ok) {
-                    const colaboradoresLista = await resColab.json();
-                    colaboradoresLista.forEach(c => {
-                        const setorNome = c.setor;
-                        if (setorNome && String(setorNome).trim() !== "" && String(setorNome) !== "Não Informado" && String(setorNome) !== "null") {
-                            const setorLimpo = String(setorNome).trim();
-
-                            const idColab = c.id_colaboradores || c.id_colaborador || c.id || c._id;
-                            if (idColab) mapaSetorPorIdColab[String(idColab).trim()] = setorLimpo;
-                            if (c.matricula) mapaSetorPorMatriculaColab[String(c.matricula).trim()] = setorLimpo;
-                            if (c.nome) mapaSetorPorIdColab[String(c.nome).trim().toLowerCase()] = setorLimpo;
-                            if (c.email) mapaSetorPorIdColab[String(c.email).trim().toLowerCase()] = setorLimpo;
-                        }
-                    });
-                }
-                
-                break; 
-            } catch (error) {
-                console.warn(`Tentando próximo servidor para catálogos auxiliares...`);
+        try {
+            // Produtos (exige / no final)
+            const resProd = await fetch(`${SERVIDOR_SISTEMA}/produtos/`);
+            if (resProd.ok) {
+                const produtosLista = await resProd.json();
+                produtosLista.forEach(p => {
+                    const idKey = p.id_produtos || p.id;
+                    if (idKey) mapaProdutosGeral[String(idKey).trim()] = p.nome;
+                });
             }
+            
+            // Máquinas (exige / no final)
+            const resMaq = await fetch(`${SERVIDOR_SISTEMA}/maquinas/`);
+            if (resMaq.ok) {
+                const maquinasLista = await resMaq.json();
+                maquinasLista.forEach(m => {
+                    const idKey = m.id_maquinas || m.id;
+                    if (idKey) mapaMaquinasGeral[String(idKey).trim()] = m.nome;
+                });
+            }
+
+            // Colaboradores (exige / no final)
+            const resColab = await fetch(`${SERVIDOR_SISTEMA}/colaboradores/`);
+            if (resColab.ok) {
+                const colaboradoresLista = await resColab.json();
+                colaboradoresLista.forEach(c => {
+                    const setorNome = c.setor;
+                    if (setorNome && String(setorNome).trim() !== "" && String(setorNome) !== "Não Informado" && String(setorNome) !== "null") {
+                        const setorLimpo = String(setorNome).trim();
+
+                        const idColab = c.id_colaboradores || c.id_colaborador || c.id || c._id;
+                        if (idColab) mapaSetorPorIdColab[String(idColab).trim()] = setorLimpo;
+                        if (c.matricula) mapaSetorPorMatriculaColab[String(c.matricula).trim()] = setorLimpo;
+                        if (c.nome) mapaSetorPorIdColab[String(c.nome).trim().toLowerCase()] = setorLimpo;
+                        if (c.email) mapaSetorPorIdColab[String(c.email).trim().toLowerCase()] = setorLimpo;
+                    }
+                });
+            }
+        } catch (error) {
+            console.warn("Falha ao carregar catálogos auxiliares:", error);
         }
     }
 
-    // BUSCA OCORRÊNCIAS
+    // BUSCA OCORRÊNCIAS (Sistema)
     async function buscarDadosAPI() {
-        let carregou = false;
-        
-        for (const urlBase of SERVIDORES) {
-            try {
-                const response = await fetch(`${urlBase}/ocorrencias`);
-                if (!response.ok) throw new Error("Erro na resposta do servidor");
-                
-                dadosGlobais = await response.json();
+        try {
+            const response = await fetch(`${SERVIDOR_SISTEMA}/ocorrencias/`);
+            if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+            
+            dadosGlobais = await response.json();
+            
+            if (typeof atualizarDashboard === "function") {
                 atualizarDashboard(dadosGlobais);
-                carregou = true;
-                break;
-            } catch (error) {
-                console.warn(`Falha ao conectar em ${urlBase}/ocorrencias...`);
             }
-        }
-
-        if (!carregou) {
+        } catch (error) {
+            console.error("Falha ao carregar ocorrências:", error);
             const elTabela = document.getElementById("tabelaOcorrencias");
             if (elTabela) {
                 elTabela.innerHTML = `
@@ -378,23 +365,30 @@
         }
     }
 
-    // BUSCA MAPA DAS MÁQUINAS (TEMPO REAL)
+    // BUSCA MAPA DAS MÁQUINAS (Tempo Real)
     async function buscarEAtualizarDashboard() {
         let dados = null;
 
-        for (const urlBase of SERVIDORES) {
-            try {
-                const resposta = await fetch(`${urlBase}${DASHBOARD_API_URL}`);
-                if (!resposta.ok) throw new Error(`Código HTTP: ${resposta.status}`);
-                
-                dados = await resposta.json();
-                break;
-            } catch (error) {
-                console.warn(`Falha ao conectar em ${urlBase}${DASHBOARD_API_URL}...`);
-            }
-        }
+        try {
+            // Chamada sem barra no final para bater exatamente no endpoint da imagem
+            const resposta = await fetch(URL_MAPAMAQUINAS_API, {
+                headers: { 'Accept': 'application/json' }
+            });
 
-        if (!dados) return;
+            if (!resposta.ok) throw new Error(`Erro na API de Máquinas: ${resposta.status}`);
+
+            dados = await resposta.json();
+            dadosMapaMaquinas = dados;
+
+            // Mapeamento explícito das chaves recebidas {"total", "normal", "parado", "manutencao"}
+            if (typeof renderizarMapaMaquinas === "function") {
+                renderizarMapaMaquinas(dados);
+            } else if (typeof atualizarMapaMaquinas === "function") {
+                atualizarMapaMaquinas(dados);
+            }
+        } catch (error) {
+            console.error("Falha ao atualizar o Mapa das Máquinas:", error);
+        }
 
         try {
             if(document.getElementById("card-total")) document.getElementById("card-total").innerText = dados.total ?? 0;
