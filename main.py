@@ -707,6 +707,11 @@ def confirmar_redefinicao_senha(dados: ConfirmarRedefinicaoSchema, db: Session =
 # Inclui as rotas de autenticação
 app.include_router(router)
 
+@app.get("/")
+async def serve_login():
+    # Retorna o arquivo login.html que está na mesma pasta do código
+    return FileResponse("login.html")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
