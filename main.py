@@ -709,8 +709,9 @@ app.include_router(router)
 
 @app.get("/")
 async def serve_login():
-    # Retorna o arquivo login.html que está na mesma pasta do código
-    return FileResponse("/telas/login.html")
+    # Caminho correto relativo à pasta do projeto: pasta_do_projeto/telas/login.html
+    login_path = os.path.join(BASE_DIR, "telas", "login.html")
+    return FileResponse(login_path)
 
 if __name__ == "__main__":
     import uvicorn
