@@ -141,7 +141,7 @@
                 }));
 
                 // Redireciona para a página de ocorrências
-                window.location.href = "ocorrencias.html";
+                window.location.href = "/telas/ocorrencias.html";
 
             } catch (err) {
                 textoErro.innerText = err.message || "Erro ao efetuar login.";
@@ -154,7 +154,7 @@
 
         // Se já houver sessão ativa, redireciona direto para a página de ocorrências
         if (sessionStorage.getItem("qc_user")) {
-            window.location.href = "ocorrencias.html";
+            window.location.href = "/telas/ocorrencias.html";
         }
     </script>
 </body>
