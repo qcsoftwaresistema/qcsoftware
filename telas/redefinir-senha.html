@@ -133,34 +133,44 @@
             btnSalvar.innerHTML = `<i class="bi bi-arrow-repeat animate-spin"></i> Atualizando...`;
 
             try {
-                const res = await fetch(`${API_BASE}/confirmar-redefinicao`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        email: emailParam,
-                        nova_senha: novaSenha
-                    })
-                });
+    const res = await fetch(`${API_BASE}/confirmar-redefinicao`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            email: emailParam,
+            nova_senha: novaSenha
+        })
+    });
 
-                const data = await res.json();
+    // 1. Tenta converter a resposta para JSON com segurança
+    let data = {};
+    try {
+        data = await res.json();
+    } catch (jsonErr) {
+        // Se a resposta do servidor não for JSON (ex: Erro 500 em texto/HTML)
+        data = {};
+    }
 
-                if (res.ok) {
-                    msgSucesso.classList.remove("hidden");
-                    document.getElementById("form-redefinir").reset();
-                    
-                    // Redireciona para o login após 2.5 segundos
-                    setTimeout(() => {
-                        window.location.href = "login.html";
-                    }, 2500);
-                } else {
-                    throw new Error(data.detail || "Não foi possível redefinir sua senha.");
-                }
-            } catch (err) {
-                exibirErro(err.message || "Erro ao conectar com o servidor.");
-            } finally {
-                btnSalvar.disabled = false;
-                btnSalvar.innerHTML = `<i class="bi bi-check-lg"></i> Alterar Senha`;
-            }
+    // 2. Valida o status HTTP da resposta
+    if (res.ok) {
+        msgSucesso.classList.remove("hidden");
+        document.getElementById("form-redefinir").reset();
+        
+        // Redireciona para o login após 2.5 segundos
+        setTimeout(() => {
+            window.location.href = "login.html";
+        }, 2500);
+    } else {
+        // Usa a mensagem da API se existir, senão usa uma mensagem padrão amigável
+        const mensagemErro = data.detail || data.message || "Ocorreu um erro no servidor. Tente novamente mais tarde.";
+        throw new Error(mensagemErro);
+    }
+} catch (err) {
+    exibirErro(err.message || "Erro ao conectar com o servidor.");
+} finally {
+    btnSalvar.disabled = false;
+    btnSalvar.innerHTML = `<i class="bi bi-check-lg"></i> Alterar Senha`;
+}
         }
     </script>
 </body>
