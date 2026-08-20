@@ -28,7 +28,6 @@ app.mount("/telas", StaticFiles(directory="telas", html=True), name="telas")
 origins = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
-    "https://qcsoftware.tech",
 ]
 
 # Adiciona o middleware de CORS no aplicativo
@@ -684,22 +683,53 @@ class ConfirmarRedefinicaoSchema(BaseModel):
     nova_senha: str
 
 @router.post("/confirmar-redefinicao")
-def confirmar_redefinicao_senha(dados: ConfirmarRedefinicaoSchema, db: Session = Depends(get_db)):
-    usuario = db.query(models.Usuario).filter(models.Usuario.email == dados.email).first()
+def confirmar_redefinicao_senha(
+    dados: ConfirmarRedefinicaoSchema, 
+    db: Session = Depends(get_db)
+):
+    try:
+        # 1. Busca o usuário no banco de dados
+        usuario = db.query(models.Usuario).filter(models.Usuario.email == dados.email).first()
 
-    if not usuario:
+        if not usuario:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="Usuário não encontrado."
+            )
+
+        # 2. Gera o hash da nova senha usando a biblioteca correta (ex: pwd_context ou passlib)
+        # Substitua 'pwd_context' pelo nome real do seu objeto do PassLib (ex: pwd_context.hash)
+        try:
+            senha_hash = get_context.hash(dados.nova_senha)
+        except Exception as hash_err:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Erro ao processar a criptografia da senha: {str(hash_err)}"
+            )
+
+        # 3. Atualiza a senha no banco de dados
+        usuario.senha_hash = senha_hash
+        db.commit()
+        db.refresh(usuario)
+
+        return {"message": "Senha redefinida com sucesso!"}
+
+    except HTTPException as http_err:
+        # Re-lança exceções HTTP intencionais (404, 400, etc) sem cair no rollback genérico
+        db.rollback()
+        raise http_err
+
+    except Exception as err:
+        # Desfaz qualquer operação pendente no banco para evitar lock/corrupção
+        db.rollback()
+        
+        # Loga o erro real no terminal do servidor para depuração
+        print(f"[ERRO CRÍTICO /confirmar-redefinicao]: {str(err)}")
+        
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
-            detail="Usuário não encontrado."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Não foi possível redefinir a senha. Verifique os dados e tente novamente."
         )
-
-    # Gera o hash da nova senha (ajuste para a função de hash usada na sua aplicação)
-    senha_hash = get_context.hash(dados.nova_senha)
-
-    usuario.senha_hash = senha_hash
-    db.commit()
-
-    return {"message": "Senha redefinida com sucesso!"}
 
 # Inclui as rotas de autenticação
 app.include_router(router)
