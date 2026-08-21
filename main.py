@@ -697,17 +697,14 @@ def confirmar_redefinicao_senha(
                 detail="Usuário não encontrado."
             )
 
-        # 2. Gera o hash da nova senha usando a biblioteca correta (ex: pwd_context ou passlib)
-        # Substitua 'pwd_context' pelo nome real do seu objeto do PassLib (ex: pwd_context.hash)
-        try:
-            senha_hash = get_context.hash(dados.nova_senha)
-        except Exception as hash_err:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Erro ao processar a criptografia da senha: {str(hash_err)}"
-            )
+        # 2. Criptografia da senha
+        # OPÇÃO A: Se 'get_context' for uma função utilitária do seu projeto:
+        senha_hash = get_context(dados.nova_senha)
 
-        # 3. Atualiza a senha no banco de dados
+        # OPÇÃO B: Se você usa o Passlib diretamente (pwd_context = CryptContext(...)):
+        # senha_hash = pwd_context.hash(dados.nova_senha)
+
+        # 3. Atualiza e salva no Banco de Dados
         usuario.senha_hash = senha_hash
         db.commit()
         db.refresh(usuario)
@@ -715,20 +712,15 @@ def confirmar_redefinicao_senha(
         return {"message": "Senha redefinida com sucesso!"}
 
     except HTTPException as http_err:
-        # Re-lança exceções HTTP intencionais (404, 400, etc) sem cair no rollback genérico
         db.rollback()
         raise http_err
 
     except Exception as err:
-        # Desfaz qualquer operação pendente no banco para evitar lock/corrupção
         db.rollback()
-        
-        # Loga o erro real no terminal do servidor para depuração
-        print(f"[ERRO CRÍTICO /confirmar-redefinicao]: {str(err)}")
-        
+        print(f"[ERRO /confirmar-redefinicao]: {str(err)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não foi possível redefinir a senha. Verifique os dados e tente novamente."
+            detail=f"Erro ao processar a alteração: {str(err)}"
         )
 
 # Inclui as rotas de autenticação
