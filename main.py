@@ -5,6 +5,9 @@ from fastapi import APIRouter, BackgroundTasks, FastAPI, Depends, HTTPException,
 from fastapi.responses import FileResponse
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import BaseModel, EmailStr
+import hashlib
+import hmac
+import secrets
 from sqlalchemy.orm import Session
 from typing import List
 import models, schemas
@@ -682,6 +685,33 @@ class ConfirmarRedefinicaoSchema(BaseModel):
     email: EmailStr
     nova_senha: str
 
+class PasswordContext:
+    """Hash de senhas sem depender de um pacote externo não instalado."""
+
+    _iterations = 600_000
+
+    def hash(self, password: str) -> str:
+        salt = secrets.token_bytes(16)
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt, self._iterations
+        )
+        return f"pbkdf2_sha256${self._iterations}${salt.hex()}${digest.hex()}"
+
+    def verify(self, password: str, encoded: str) -> bool:
+        try:
+            algorithm, iterations, salt, expected = encoded.split("$", 3)
+            if algorithm != "pbkdf2_sha256":
+                return False
+            actual = hashlib.pbkdf2_hmac(
+                "sha256", password.encode("utf-8"), bytes.fromhex(salt), int(iterations)
+            )
+            return hmac.compare_digest(actual.hex(), expected)
+        except (ValueError, TypeError):
+            return False
+
+
+pwd_context = PasswordContext()
+
 @router.post("/confirmar-redefinicao")
 def confirmar_redefinicao_senha(
     dados: ConfirmarRedefinicaoSchema, 
@@ -697,14 +727,10 @@ def confirmar_redefinicao_senha(
                 detail="Usuário não encontrado."
             )
 
-        # 2. Criptografia da senha
-        # OPÇÃO A: Se 'get_context' for uma função utilitária do seu projeto:
-        senha_hash = get_context(dados.nova_senha)
+        # 2. Gera o hash correto da nova senha plana
+        senha_hash = pwd_context.hash(dados.nova_senha)
 
-        # OPÇÃO B: Se você usa o Passlib diretamente (pwd_context = CryptContext(...)):
-        # senha_hash = pwd_context.hash(dados.nova_senha)
-
-        # 3. Atualiza e salva no Banco de Dados
+        # 3. Atualiza o registro e salva no BD
         usuario.senha_hash = senha_hash
         db.commit()
         db.refresh(usuario)
@@ -720,7 +746,7 @@ def confirmar_redefinicao_senha(
         print(f"[ERRO /confirmar-redefinicao]: {str(err)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erro ao processar a alteração: {str(err)}"
+            detail="Não foi possível processar a alteração de senha."
         )
 
 # Inclui as rotas de autenticação
