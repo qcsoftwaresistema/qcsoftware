@@ -55,12 +55,18 @@
                     </a>
                 </div>
                 <div class="relative">
-                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                        <i class="bi bi-lock"></i>
-                    </span>
-                    <input type="password" id="login-senha" required placeholder="••••••••"
-                        class="w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-white">
-                </div>
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                    <i class="bi bi-lock"></i>
+                </span>
+                <!-- Adicionado pr-10 para a senha não sobrescrever o ícone do olho -->
+                <input type="password" id="login-senha" required placeholder="••••••••"
+                    class="w-full pl-10 pr-10 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-white">
+                
+                <!-- Botão com o ícone do olho -->
+                <button type="button" onclick="toggleSenha()" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:outline-none">
+                    <i id="icone-olho" class="bi bi-eye"></i>
+                </button>
+            </div>
             </div>
 
             <button type="submit" id="btn-entrar"
@@ -156,6 +162,22 @@
         if (sessionStorage.getItem("qc_user")) {
             window.location.href = "/telas/ocorrencias.html";
         }
+
+    function toggleSenha() {
+    const inputSenha = document.getElementById('login-senha');
+    const iconeOlho = document.getElementById('icone-olho');
+
+    if (inputSenha.type === 'password') {
+        inputSenha.type = 'text';
+        iconeOlho.classList.remove('bi-eye');
+        iconeOlho.classList.add('bi-eye-slash');
+    } else {
+        inputSenha.type = 'password';
+        iconeOlho.classList.remove('bi-eye-slash');
+        iconeOlho.classList.add('bi-eye');
+    }
+}
+
     </script>
 </body>
 </html>
