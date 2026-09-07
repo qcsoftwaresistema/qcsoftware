@@ -826,37 +826,56 @@ def verificar_senha(senha_plain: str, hash_banco: str) -> bool:
 
     hash_banco_clean = hash_banco.strip()
 
-    # 1. VALIDAÇÃO DE HASHEs ANTIGOS SEM PREFIXO (SHA-256 / MD5)
-    # Executado primeiro para ser instantâneo e não passar pelo passlib desnecessariamente
-    if not hash_banco_clean.startswith("$2") and not hash_banco_clean.startswith("pbkdf2_"):
-        # Teste SHA-256 (64 caracteres hexadecimal - ex: linhas 3 a 6 do banco)
+    # 1. TRATAMENTO PARA O HASH DA NUVEM (Formato salt$hash SHA-256)
+    # Exemplo da foto: 3d764ad49f...$36a1699cc25c...
+    if "$" in hash_banco_clean and not hash_banco_clean.startswith(("$2", "pbkdf2_")):
+        partes = hash_banco_clean.split("$")
+        if len(partes) == 2:
+            salt, hash_esperado = partes[0], partes[1]
+            
+            # Testa combinação 1: salt + senha
+            calc1 = hashlib.sha256((salt + senha_plain).encode("utf-8")).hexdigest()
+            if calc1.lower() == hash_esperado.lower():
+                return True
+
+            # Testa combinação 2: senha + salt
+            calc2 = hashlib.sha256((senha_plain + salt).encode("utf-8")).hexdigest()
+            if calc2.lower() == hash_esperado.lower():
+                return True
+
+    # 2. HASHEs SIMPLES SEM PREFIXO (SHA-256 / MD5 / Texto Puro)
+    if not hash_banco_clean.startswith(("$2", "pbkdf2_")):
+        # SHA-256 simples
         sha256_hash = hashlib.sha256(senha_plain.encode("utf-8")).hexdigest()
         if sha256_hash.lower() == hash_banco_clean.lower():
             return True
 
-        # Teste MD5 (32 caracteres hexadecimal)
+        # MD5 simples
         md5_hash = hashlib.md5(senha_plain.encode("utf-8")).hexdigest()
         if md5_hash.lower() == hash_banco_clean.lower():
             return True
 
-        # Se for texto puro sem criptografia
+        # Texto puro
         if senha_plain == hash_banco_clean:
             return True
 
         return False
 
-    # 2. VALIDAÇÃO DE HASHES MODERNOS (Bcrypt / PBKDF2)
+    # 3. HASHEs MODERNOS (Bcrypt / PBKDF2)
     try:
-        return pwd_context.verify(senha_plain, hash_banco_clean)
-    except Exception as e:
-        print(f"[AVISO HASH]: Falha na verificação com Passlib: {e}")
-        
-        # Fallback de compatibilidade caso haja divergência no prefixo $2b$ vs $2a$
-        try:
-            hash_ajustado = hash_banco_clean.replace("$2b$", "$2a$")
-            return pwd_context.verify(senha_plain, hash_ajustado)
-        except Exception:
-            return False
+        if pwd_context.verify(senha_plain, hash_banco_clean):
+            return True
+    except Exception:
+        pass
+
+    # Fallback Bcrypt ($2b$ vs $2a$)
+    try:
+        hash_ajustado = hash_banco_clean.replace("$2b$", "$2a$")
+        return pwd_context.verify(senha_plain, hash_ajustado)
+    except Exception:
+        pass
+
+    return False
 
 
 @app.get("/", response_class=FileResponse)
