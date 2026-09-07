@@ -3,20 +3,46 @@ from multiprocessing import get_context
 import os
 from fastapi import APIRouter, BackgroundTasks, FastAPI, Depends, HTTPException, logger, status
 from fastapi.responses import FileResponse
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import BaseModel, EmailStr
 import hashlib
 import hmac
 import secrets
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from typing import List
 import models, schemas
 from database import engine, get_db
 import logging
-import resend
+import json
+import importlib
+from urllib.request import Request, urlopen
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from dotenv import load_dotenv
+try:
+    # Importa passlib apenas quando estiver instalado no ambiente.
+    CryptContext = importlib.import_module("passlib.context").CryptContext
+except ImportError:
+    # Permite iniciar mesmo quando passlib não estiver disponível.
+    class CryptContext:
+        def __init__(self, *args, **kwargs):
+            self.schemes = kwargs.get("schemes", [])
+
+        def hash(self, password: str) -> str:
+            return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+        def verify(self, password: str, hash_value: str) -> bool:
+            if not hash_value:
+                return False
+            return hash_value == hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+try:
+    # Carrega dotenv sem exigir que o analisador estático resolva o pacote.
+    load_dotenv = importlib.import_module("dotenv").load_dotenv
+except ImportError:
+    # Permite iniciar mesmo quando python-dotenv não está instalado.
+    def load_dotenv():
+        return False
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -586,9 +612,7 @@ logger = logging.getLogger(__name__)
 # O os.getenv busca o valor configurado nas variáveis do Render ou no arquivo .env
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 
-if RESEND_API_KEY:
-    resend.api_key = RESEND_API_KEY
-else:
+if not RESEND_API_KEY:
     logger.warning("RESEND_API_KEY não foi encontrada nas variáveis de ambiente.") 
 
 router = APIRouter(prefix="/api", tags=["Autenticação"])
@@ -671,7 +695,20 @@ async def solicitar_recuperacao_senha(
 
     # 7. Envio do e-mail via API REST HTTPS
     try:
-        resposta = resend.Emails.send(params)
+        if not RESEND_API_KEY:
+            raise RuntimeError("RESEND_API_KEY não configurada")
+
+        request = Request(
+            "https://api.resend.com/emails",
+            data=json.dumps(params).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urlopen(request, timeout=15) as response:
+            resposta = json.loads(response.read().decode("utf-8"))
         logger.info(f"E-mail enviado via Resend com sucesso ID: {resposta}")
     except Exception as err:
         logger.error(f"Erro ao enviar e-mail pelo Resend: {str(err)}")
@@ -763,10 +800,99 @@ TELAS_DIR = os.path.join(BASE_DIR, "telas")
 if os.path.exists(TELAS_DIR):
     app.mount("/telas", StaticFiles(directory=TELAS_DIR, html=True), name="telas")
 
-# Rota principal deve retornar o FileResponse de login.html
+pwd_context = CryptContext(
+    schemes=["bcrypt", "django_pbkdf2_sha256"],
+    deprecated="auto"
+)
+
+class LoginSchema(BaseModel):
+    usuario: str
+    senha: str
+
+
+def buscar_usuario_no_banco(usuario_input: str, db: Session):
+    termo = usuario_input.strip().lower()
+    return db.query(models.Usuario).filter(
+        or_(
+            func.lower(models.Usuario.usuario) == termo,
+            func.lower(models.Usuario.email) == termo
+        )
+    ).first()
+
+
+def verificar_senha(senha_plain: str, hash_banco: str) -> bool:
+    if not hash_banco:
+        return False
+
+    hash_banco_clean = hash_banco.strip()
+
+    # 1. VALIDAÇÃO DE HASHEs ANTIGOS SEM PREFIXO (SHA-256 / MD5)
+    # Executado primeiro para ser instantâneo e não passar pelo passlib desnecessariamente
+    if not hash_banco_clean.startswith("$2") and not hash_banco_clean.startswith("pbkdf2_"):
+        # Teste SHA-256 (64 caracteres hexadecimal - ex: linhas 3 a 6 do banco)
+        sha256_hash = hashlib.sha256(senha_plain.encode("utf-8")).hexdigest()
+        if sha256_hash.lower() == hash_banco_clean.lower():
+            return True
+
+        # Teste MD5 (32 caracteres hexadecimal)
+        md5_hash = hashlib.md5(senha_plain.encode("utf-8")).hexdigest()
+        if md5_hash.lower() == hash_banco_clean.lower():
+            return True
+
+        # Se for texto puro sem criptografia
+        if senha_plain == hash_banco_clean:
+            return True
+
+        return False
+
+    # 2. VALIDAÇÃO DE HASHES MODERNOS (Bcrypt / PBKDF2)
+    try:
+        return pwd_context.verify(senha_plain, hash_banco_clean)
+    except Exception as e:
+        print(f"[AVISO HASH]: Falha na verificação com Passlib: {e}")
+        
+        # Fallback de compatibilidade caso haja divergência no prefixo $2b$ vs $2a$
+        try:
+            hash_ajustado = hash_banco_clean.replace("$2b$", "$2a$")
+            return pwd_context.verify(senha_plain, hash_ajustado)
+        except Exception:
+            return False
+
+
 @app.get("/", response_class=FileResponse)
 async def serve_login():
     login_path = os.path.join(TELAS_DIR, "login.html")
     if os.path.exists(login_path):
         return FileResponse(login_path)
-    return {"erro": "Arquivo login.html não encontrado na pasta telas"}
+    raise HTTPException(status_code=404, detail="Arquivo login.html não encontrado na pasta telas")
+
+
+@app.post("/autenticar")
+async def autenticar(dados: LoginSchema, db: Session = Depends(get_db)):
+    user = buscar_usuario_no_banco(dados.usuario, db)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário ou senha incorretos."
+        )
+
+    senha_hash_banco = getattr(user, "senha_hash", None) or getattr(user, "senha", None)
+    senha_digitada = dados.senha.strip()
+
+    if not verificar_senha(senha_digitada, senha_hash_banco):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário ou senha incorretos."
+        )
+
+    user_dict = {
+        column.name: getattr(user, column.name)
+        for column in user.__table__.columns
+        if column.name not in ["senha_hash", "senha"]
+    }
+
+    return {
+        "sucesso": True,
+        "usuario": user_dict
+    }
