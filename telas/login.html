@@ -86,82 +86,77 @@
         const API_USUARIOS_URL = "https://sistema.qcsoftware.com.br/usuarios/";
         const API_BASE_PERMISSOES = "https://sistema.qcsoftware.com.br/permissoes/perfil/";
 
-        async function autenticarUsuario(e) {
-            e.preventDefault();
-            
-            const usuarioInput = document.getElementById("login-usuario").value.trim();
-            const senhaInput = document.getElementById("login-senha").value;
-            const msgErro = document.getElementById("msg-erro");
-            const textoErro = document.getElementById("texto-erro");
-            const btnEntrar = document.getElementById("btn-entrar");
+    async function autenticarUsuario(e) {
+        e.preventDefault();
+        
+        const usuarioInput = document.getElementById("login-usuario").value.trim();
+        const senhaInput = document.getElementById("login-senha").value;
+        const msgErro = document.getElementById("msg-erro");
+        const textoErro = document.getElementById("texto-erro");
+        const btnEntrar = document.getElementById("btn-entrar");
 
-            msgErro.classList.add("hidden");
-            btnEntrar.disabled = true;
-            btnEntrar.innerHTML = `<i class="bi bi-arrow-repeat animate-spin"></i> Autenticando...`;
+        msgErro.classList.add("hidden");
+        btnEntrar.disabled = true;
+        btnEntrar.innerHTML = `<i class="bi bi-arrow-repeat animate-spin"></i> Autenticando...`;
 
-            try {
-                // Busca a lista diretamente do endpoint /usuarios/
-                const res = await fetch(API_USUARIOS_URL);
-                
-                if (!res.ok) {
-                    throw new Error("Não foi possível conectar ao servidor de usuários.");
-                }
+        try {
+            // Envia credenciais para o backend validar no banco de dados
+            const res = await fetch("/autenticar", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    usuario: usuarioInput,
+                    senha: senhaInput
+                })
+            });
 
-                const usuarios = await res.json();
-                
-                // Encontra o usuário cadastrado (insensível a maiúsculas/minúsculas)
-                const userEncontrado = usuarios.find(u => 
-                    (u.usuario && u.usuario.toLowerCase() === usuarioInput.toLowerCase()) ||
-                    (u.login && u.login.toLowerCase() === usuarioInput.toLowerCase())
-                );
+            const data = await res.json();
 
-                if (!userEncontrado) {
-                    throw new Error("Usuário não encontrado.");
-                }
-
-                // Valida a senha (suporta chave 'senha' ou 'senha_hash')
-                const senhaCadastrada = userEncontrado.senha || userEncontrado.senha_hash || userEncontrado.password;
-                if (senhaCadastrada && senhaCadastrada !== senhaInput) {
-                    throw new Error("Senha incorreta.");
-                }
-
-                // Carrega as permissões vinculadas ao perfil (caso existam)
-                let permissoes = [];
-                const idPerfil = userEncontrado.id_perfis || userEncontrado.id_perfil;
-                if (idPerfil) {
-                    try {
-                        const resPerms = await fetch(`${API_BASE_PERMISSOES}${idPerfil}`);
-                        if (resPerms.ok) permissoes = await resPerms.json();
-                    } catch (e) {
-                        console.warn("Permissões não puderam ser carregadas:", e);
-                    }
-                }
-
-                // Armazena dados na sessão
-                sessionStorage.setItem("qc_user", JSON.stringify({
-                    id_usuarios: userEncontrado.id_usuarios || userEncontrado.id,
-                    usuario: userEncontrado.usuario || userEncontrado.login,
-                    id_perfis: idPerfil,
-                    nome_perfil: userEncontrado.nome_perfil || userEncontrado.perfil || "Usuário",
-                    permissoes: permissoes
-                }));
-
-                // Redireciona para a página de ocorrências
-                window.location.href = "/telas/ocorrencias.html";
-
-            } catch (err) {
-                textoErro.innerText = err.message || "Erro ao efetuar login.";
-                msgErro.classList.remove("hidden");
-            } finally {
-                btnEntrar.disabled = false;
-                btnEntrar.innerHTML = `<i class="bi bi-box-arrow-in-right"></i> Entrar`;
+            if (!res.ok) {
+                throw new Error(data.detail || "Usuário ou senha incorretos.");
             }
-        }
 
-        // Se já houver sessão ativa, redireciona direto para a página de ocorrências
-        if (sessionStorage.getItem("qc_user")) {
+            const userEncontrado = data.usuario;
+
+            // Carrega as permissões vinculadas ao perfil (caso existam)
+            let permissoes = [];
+            const idPerfil = userEncontrado.id_perfis || userEncontrado.id_perfil;
+            if (idPerfil) {
+                try {
+                    const resPerms = await fetch(`${API_BASE_PERMISSOES}${idPerfil}`);
+                    if (resPerms.ok) permissoes = await resPerms.json();
+                } catch (e) {
+                    console.warn("Permissões não puderam ser carregadas:", e);
+                }
+            }
+
+            // Armazena dados na sessão
+            sessionStorage.setItem("qc_user", JSON.stringify({
+                id_usuarios: userEncontrado.id_usuarios || userEncontrado.id,
+                usuario: userEncontrado.usuario || userEncontrado.login,
+                id_perfis: idPerfil,
+                nome_perfil: userEncontrado.nome_perfil || userEncontrado.perfil || "Usuário",
+                permissoes: permissoes
+            }));
+
+            // Redireciona para a página de ocorrências
             window.location.href = "/telas/ocorrencias.html";
+
+        } catch (err) {
+            textoErro.innerText = err.message || "Erro ao efetuar login.";
+            msgErro.classList.remove("hidden");
+        } finally {
+            btnEntrar.disabled = false;
+            btnEntrar.innerHTML = `<i class="bi bi-box-arrow-in-right"></i> Entrar`;
         }
+    }
+
+    // Redireciona se a sessão já estiver ativa
+    if (sessionStorage.getItem("qc_user")) {
+        window.location.href = "/telas/ocorrencias.html";
+    }
 
     function toggleSenha() {
     const inputSenha = document.getElementById('login-senha');
