@@ -15,6 +15,7 @@ from database import engine, get_db
 import logging
 import json
 import importlib
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -601,19 +602,18 @@ def deletar_perfil(id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "Perfil deletado com sucesso", "detail": "Perfil removido"}
 
-# Importe seus schemas, models, context de hash e get_db do seu projeto
+# Importe seus schemas, models e get_db do seu projeto:
 # import schemas, models
 # from database import get_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- CONFIGURAÇÃO SEGURA DO RESEND ---
-# O os.getenv busca o valor configurado nas variáveis do Render ou no arquivo .env
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+# --- CONFIGURAÇÃO SEGURA DO BREVO ---
+BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 
-if not RESEND_API_KEY:
-    logger.warning("RESEND_API_KEY não foi encontrada nas variáveis de ambiente.") 
+if not BREVO_API_KEY:
+    logger.warning("BREVO_API_KEY não foi encontrada nas variáveis de ambiente.")
 
 router = APIRouter(prefix="/api", tags=["Autenticação"])
 
@@ -683,35 +683,49 @@ async def solicitar_recuperacao_senha(
     </html>
     """
 
-    # 6. Parâmetros da requisição para a API do Resend
-    params = {
-        # Enquanto testa antes de validar o domínio personalizado no Resend, 
-        # use "Q.C Software <contato@qcsoftware.com.br>"
-        "from": "Q.C Software <contato@qcsoftware.com.br>",
-        "to": [usuario.email],
+    # 6. Estrutura de payload exigida pela API v3 do Brevo
+    payload = {
+        "sender": {
+            "name": "Q.C Software",
+            "email": "contato@qcsoftware.com.br"
+        },
+        "to": [
+            {"email": usuario.email}
+        ],
         "subject": "Q.C Software - Redefinição de Senha",
-        "html": html_content
+        "htmlContent": html_content
     }
 
-    # 7. Envio do e-mail via API REST HTTPS
+    # 7. Envio do e-mail via API REST HTTPS do Brevo
     try:
-        if not RESEND_API_KEY:
-            raise RuntimeError("RESEND_API_KEY não configurada")
+        chave_api = BREVO_API_KEY or os.getenv("BREVO_API_KEY", "").strip()
+
+        if not chave_api:
+            raise RuntimeError("BREVO_API_KEY não configurada no ambiente.")
 
         request = Request(
-            "https://api.resend.com/emails",
-            data=json.dumps(params).encode("utf-8"),
+            "https://api.brevo.com/v3/smtp/email",
+            data=json.dumps(payload).encode("utf-8"),
             headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}",
-                "Content-Type": "application/json",
+                "accept": "application/json",
+                "api-key": chave_api,
+                "content-type": "application/json"
             },
             method="POST",
         )
         with urlopen(request, timeout=15) as response:
             resposta = json.loads(response.read().decode("utf-8"))
-        logger.info(f"E-mail enviado via Resend com sucesso ID: {resposta}")
+        logger.info(f"E-mail enviado via Brevo com sucesso: {resposta}")
+
+    except HTTPError as err:
+        corpo_resposta = err.read().decode("utf-8")
+        logger.error(f"Erro HTTP {err.code} do Brevo: {corpo_resposta}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Brevo HTTP {err.code}: {corpo_resposta}"
+        )
     except Exception as err:
-        logger.error(f"Erro ao enviar e-mail pelo Resend: {str(err)}")
+        logger.error(f"Erro ao enviar e-mail pelo Brevo: {str(err)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno ao enviar o e-mail: {str(err)}"
@@ -784,7 +798,7 @@ def confirmar_redefinicao_senha(
 
     except Exception as err:
         db.rollback()
-        print(f"[ERRO /confirmar-redefinicao]: {str(err)}")
+        logger.error(f"[ERRO /confirmar-redefinicao]: {str(err)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Não foi possível processar a alteração de senha."
