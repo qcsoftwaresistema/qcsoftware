@@ -64,7 +64,7 @@
 
     <script>
         const API_BASE = window.location.origin.includes("qcsoftware.com.br")
-            ? "/api" 
+            ? "" 
             : "https://sistema.qcsoftware.com.br";
 
         async function enviarEmailRecuperacao(e) {
@@ -83,8 +83,8 @@
             btnEnviar.innerHTML = `<i class="bi bi-arrow-repeat animate-spin"></i> Enviando...`;
 
             try {
-                // Chamada enviando POST para a nova rota /recuperar-senha
-                const res = await fetch(`${API_BASE}/recuperar-senha`, {
+                // Endpoint unificado enviando POST para /api/recuperar-senha
+                const res = await fetch(`${API_BASE}/api/recuperar-senha`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ email: email })
@@ -97,7 +97,11 @@
                     msgSucesso.classList.remove("hidden");
                     document.getElementById("form-recuperar").reset();
                 } else {
-                    throw new Error(data.detail || "E-mail não cadastrado em nosso sistema.");
+                    let mensagemFormatada = data.detail || "Erro ao processar a solicitação.";
+                    if (typeof mensagemFormatada === "object") {
+                        mensagemFormatada = JSON.stringify(mensagemFormatada);
+                    }
+                    throw new Error(mensagemFormatada);
                 }
             } catch (err) {
                 textoErro.innerText = err.message || "Erro ao conectar com o servidor.";
