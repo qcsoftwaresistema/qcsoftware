@@ -204,39 +204,71 @@ function renderizarTabelaOcorrencias(ocorrencias) {
     if (!tabela) return;
 
     if (!ocorrencias || ocorrencias.length === 0) {
-        tabela.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">Nenhum colaborador encontrado.</td></tr>`;
+        tabela.innerHTML = `<div class="text-center py-4 text-muted">Nenhuma ocorrência encontrada.</div>`;
         return;
     }
 
-    tabela.innerHTML = ocorrencias.map(c => {
-        let idBruto = c.id_ocorrencias ?? c.id ?? c._id;
-        const ocorrenciaId = idBruto !== undefined ? idBruto.toString().trim() : ""; 
-        if (!ocorrenciaId) return `<tr class="table-warning"><td colspan="6">⚠️ Erro: Registro sem ID válido</td></tr>`;
+    tabela.innerHTML = ocorrencias.map((c, index) => {
+        // 1. Identificação segura do ID
+        let idBruto = c.id_ocorrencias ?? c.id_ocorrencia ?? c.id ?? c._id;
+        const ocorrenciaId = (idBruto !== undefined && idBruto !== null && idBruto !== "") 
+            ? idBruto.toString().trim() 
+            : (index + 1).toString();
 
-        const registroEstaAtivo = c.ativo === true || c.ativo === "true" || (c.ativo === undefined && String(c.situacao).toLowerCase() === "ativo") || (c.ativo === undefined && c.situacao === undefined);
-        let situacaoTratada = registroEstaAtivo ? "Ativo" : "Inativo";
-
-        let nomeCargoExibicao = "-";
-        const cargoBruto = c.cargos ?? c.cargo ?? c.id_cargos ?? c.id_cargo; 
-        if (cargoBruto && Array.isArray(listaDeCargos)) {
-            const cargoEncontrado = listaDeCargos.find(cargo => (cargo.id_cargos ?? cargo.id) == cargoBruto);
-            nomeCargoExibicao = cargoEncontrado ? cargoEncontrado.nome : `Cargo ${cargoBruto}`;
+        // 2. Busca dos nomes correspondentes (Máquina, Colaborador e Produto)
+        let maquinaNome = c.nome_maquina || c.maquina || "-";
+        if (maquinaNome === "-" && c.id_maquinas && Array.isArray(window.listaDeMaquinas)) {
+            const mEncontrada = window.listaDeMaquinas.find(m => (m.id_maquinas ?? m.id) == c.id_maquinas);
+            if (mEncontrada) maquinaNome = mEncontrada.nome;
         }
 
-        const badgeClasse = situacaoTratada === 'Ativo' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary';
+        let colaboradorNome = c.nome_colaborador || c.colaborador || "-";
+        if (colaboradorNome === "-" && c.id_colaboradores && Array.isArray(window.listaDeColaboradores)) {
+            const cEncontrado = window.listaDeColaboradores.find(colab => (colab.id_colaboradores ?? colab.id) == c.id_colaboradores);
+            if (cEncontrado) colaboradorNome = cEncontrado.nome;
+        }
 
+        let produtoNome = c.nome_produto || c.produto || "-";
+        if (produtoNome === "-" && c.id_produtos && Array.isArray(window.listaDeProdutos)) {
+            const pEncontrado = window.listaDeProdutos.find(p => (p.id_produtos ?? p.id) == c.id_produtos);
+            if (pEncontrado) produtoNome = pEncontrado.nome;
+        }
+
+        // 3. Formatação da Situação
+        const situacaoTexto = c.situacao || "Pendente";
+        let badgeClasse = "text-warning fw-bold";
+
+        if (situacaoTexto.toLowerCase() === "concluído") {
+            badgeClasse = "text-success fw-bold";
+        } else if (situacaoTexto.toLowerCase() === "em andamento") {
+            badgeClasse = "text-primary fw-bold";
+        }
+
+        // Renderização em estilo bloco/tabela chave-valor igual às seções 2 e 3
         return `
-            <tr class="align-middle">                
-                <td><strong>${c.nome || "Sem Nome"}</strong></td>
-                <td>${c.matricula || "-"}</td>
-                <td>${nomeCargoExibicao}</td>
-                <td>${c.email || "-"}</td>
-                <td><span class="badge ${badgeClasse}">${situacaoTratada}</span></td>
-                <td class="text-end">
-                    <button class="btn btn-sm btn-outline-primary border-0" onclick="prepararEdicaoPorId('${ocorrenciaId}')"><i class="bi bi-pencil"></i></button>
-                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deletarItemGeral('ocorrencias', '${ocorrenciaId}')"><i class="bi bi-trash"></i></button>
-                </td>
-            </tr>
+            <div class="relatorio-secao-1-container border rounded p-2 mb-3">
+                <table class="relatorio-tabela tabla-info w-100">
+                    <tr>
+                        <td style="width: 50%;"><strong>Máquina:</strong> <span>${maquinaNome}</span></td>
+                        <td style="width: 50%;"><strong>Colaborador:</strong> <span>${colaboradorNome}</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Produto:</strong> <span>${produtoNome}</span></td>
+                        <td><strong>Lote do Produto:</strong> <span>${c.lote_produtos || c.lote || "-"}</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Número da Nota Fiscal:</strong> <span>${c.numero_nota || "-"}</span></td>
+                        <td><strong>Data da Ocorrência:</strong> <span>${c.data_ocorrencias ? c.data_ocorrencias.replace('T', ' ') : "-"}</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Situação:</strong> <span class="${badgeClasse}">${situacaoTexto}</span></td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary border-0 py-0" onclick="prepararEdicaoPorId('${ocorrenciaId}')" title="Editar"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger border-0 py-0" onclick="deletarItemGeral('ocorrencias', '${ocorrenciaId}')" title="Excluir"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                </table>
+            </div>
         `;
     }).join('');
 }
@@ -322,20 +354,41 @@ document.getElementById('formOcorrencias')?.addEventListener('submit', async (e)
         if (res.ok) { 
             dispararNotificacao(id ? "Ocorrência alterada com sucesso!" : "Nova ocorrência cadastrada com sucesso!", id ? "atualizar" : "criar");
 
-            // LIMPEZA DA TELA APENAS AQUI (PÓS-SUCESSO DA API)
+            // 1. PRIMEIRO: Copia os dados do formulário para o layout de impressão A4[cite: 2, 3]
+            if (typeof prepararDadosImpressao === "function") {
+                prepararDadosImpressao();
+            }
+
+            // 2. SEGUNDO: Exibe o modal/toast para confirmação de impressão[cite: 2]
+            if (typeof exibirToastImpressao === "function") {
+                exibirToastImpressao();
+            }
+
+            // 3. TERCEIRO: Reseta os campos do formulário
             document.getElementById('formOcorrencias').reset();
             
             const inputDataOcorrencia = document.getElementById('ocorrencias-data');
             if (inputDataOcorrencia) inputDataOcorrencia.value = obterDataHoraAtualLocal();
 
             if (campoId) campoId.value = ""; 
-            document.getElementById('maquinas-nome').value = "";
-            document.getElementById('produtos-nome').value = "";
-            document.getElementById('colaboradores-nome').value = "";
             
-            document.getElementById('maquinas-nome-busca').value = "";
-            document.getElementById('colaboradores-nome-busca').value = "";
-            document.getElementById('produtos-nome-busca').value = "";
+            const elMaquina = document.getElementById('maquinas-nome');
+            if (elMaquina) elMaquina.value = "";
+            
+            const elProduto = document.getElementById('produtos-nome');
+            if (elProduto) elProduto.value = "";
+            
+            const elColaborador = document.getElementById('colaboradores-nome');
+            if (elColaborador) elColaborador.value = "";
+            
+            const elMaquinaBusca = document.getElementById('maquinas-nome-busca');
+            if (elMaquinaBusca) elMaquinaBusca.value = "";
+            
+            const elColabBusca = document.getElementById('colaboradores-nome-busca');
+            if (elColabBusca) elColabBusca.value = "";
+            
+            const elProdBusca = document.getElementById('produtos-nome-busca');
+            if (elProdBusca) elProdBusca.value = "";
 
             if (typeof resetarVisualFoto === "function") resetarVisualFoto();
 
@@ -362,6 +415,75 @@ function dispararNotificacao(mensagem, acao = 'sucesso') {
         const bootstrapToast = new bootstrap.Toast(elementoToast, { delay: 3500 });
         bootstrapToast.show();
     }
+}
+
+// =========================================================================
+// FUNÇÕES DE IMPRESSÃO E CONTROLE DO MODAL DE CONFIRMAÇÃO
+// =========================================================================
+
+function exibirToastImpressao() {
+    const toast = document.getElementById('toastConfirmacao');
+    const backdrop = document.getElementById('toastBackdrop');
+    if (toast) toast.classList.remove('d-none');
+    if (backdrop) backdrop.classList.remove('d-none');
+}
+
+function fecharToastImpressao() {
+    const toast = document.getElementById('toastConfirmacao');
+    const backdrop = document.getElementById('toastBackdrop');
+    if (toast) toast.classList.add('d-none');
+    if (backdrop) backdrop.classList.add('d-none');
+}
+
+function prepararDadosImpressao() {
+    // 1. Dados Cabeçalho e Meta[cite: 2]
+    document.getElementById('print-numero').innerText = document.getElementById('ocorrencias-numero')?.value || "---";
+    document.getElementById('print-data').innerText = new Date().toLocaleDateString('pt-BR');
+    
+    const usuarioTexto = document.getElementById('usuario-nome')?.innerText.replace('Usuário:', '').trim();
+    document.getElementById('print-usuario').innerText = usuarioTexto || "---";
+
+    // 2. Informações Gerais[cite: 2]
+    document.getElementById('print-maquina').innerText = document.getElementById('maquinas-nome-busca')?.value || "---";
+    document.getElementById('print-colaborador').innerText = document.getElementById('colaboradores-nome-busca')?.value || "---";
+    document.getElementById('print-produto').innerText = document.getElementById('produtos-nome-busca')?.value || "---";
+    document.getElementById('print-lote').innerText = document.getElementById('ocorrencias-lote-produto')?.value || "---";
+    document.getElementById('print-nf').innerText = document.getElementById('ocorrencias-numero-nota-fiscal')?.value || "---";
+    document.getElementById('print-data-ocorrencia').innerText = document.getElementById('ocorrencias-data')?.value?.replace('T', ' ') || "---";
+    document.getElementById('print-situacao').innerText = document.getElementById('ocorrencias-situacao')?.value || "---";
+
+    // 3. Descrição dos Problemas e Falhas (5W2H)[cite: 2]
+    document.getElementById('print-problema').innerText = document.getElementById('ocorrencias-problema')?.value || "---";
+    document.getElementById('print-falha-onde').innerText = document.getElementById('ocorrencias-falha-onde')?.value || "---";
+    document.getElementById('print-falha-como').innerText = document.getElementById('ocorrencias-falha-como')?.value || "---";
+    document.getElementById('print-falha-quando').innerText = document.getElementById('ocorrencias-falha-quando')?.value || "---";
+    document.getElementById('print-falha-quem').innerText = document.getElementById('ocorrencias-falha-quem')?.value || "---";
+
+    // 4. Ações e Observações[cite: 2]
+    document.getElementById('print-acao-corretiva').innerText = document.getElementById('ocorrencias-acao-corretiva')?.value || "---";
+    document.getElementById('print-observacoes').innerText = document.getElementById('ocorrencias-observacoes')?.value || "---";
+    document.getElementById('print-prazo').innerText = document.getElementById('ocorrencias-data-prazo')?.value || "---";
+    
+    document.getElementById('print-colaborador-assinatura').innerText = document.getElementById('colaboradores-nome-busca')?.value || "Colaborador Q.C Software";
+
+    // 5. Tratamento de Foto
+    const imgPrint = document.getElementById('print-foto-img');
+    const placeholder = document.getElementById('print-foto-placeholder');
+    
+    if (typeof FOTO_OCORRENCIA_BASE64 !== "undefined" && FOTO_OCORRENCIA_BASE64) {
+        imgPrint.src = FOTO_OCORRENCIA_BASE64;
+        imgPrint.classList.remove('d-none');
+        placeholder.classList.add('d-none');
+    } else {
+        imgPrint.src = "";
+        imgPrint.classList.add('d-none');
+        placeholder.classList.remove('d-none');
+    }
+}
+
+function confirmarEImprimir() {
+    fecharToastImpressao();
+    window.print();
 }
 
 // =========================================================================
