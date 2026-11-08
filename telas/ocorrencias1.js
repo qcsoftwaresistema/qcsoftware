@@ -257,7 +257,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // =========================================================================
-// RENDERIZAÇÃO EM TELA DO HTML (ALTA PERFORMANCE) - CORRIGIDO DEFINITIVO
+// RENDERIZAÇÃO EM TELA DO HTML COM TRATAMENTO DE TRAÇO (-)
 // =========================================================================
 function renderizarTabelaOcorrencias(ocorrencias) {
     const tabela = document.getElementById('tabela-ocorrencias');
@@ -268,8 +268,18 @@ function renderizarTabelaOcorrencias(ocorrencias) {
         return;
     }
 
+    // Função auxiliar para sanitizar e exibir traço (-) quando o campo estiver vazio ou padrão
+    const formatarComTraco = (valor) => {
+        if (valor === undefined || valor === null) return "-";
+        const str = String(valor).trim();
+        if (str === "" || str === "0" || str.toLowerCase() === "não informado" || str.toLowerCase() === "nao informado") {
+            return "-";
+        }
+        return str;
+    };
+
     tabela.innerHTML = ocorrencias.map(o => {
-        // Captura o número identificador real que a API mandou (ex: 66)
+        // Captura o número identificador real
         let idBruto = o.numero_ocorrencias ?? o.id ?? o.id_ocorrencias ?? 0;
         const numeroOcoInt = parseInt(idBruto, 10) || 0;
 
@@ -297,7 +307,7 @@ function renderizarTabelaOcorrencias(ocorrencias) {
             } catch (e) { }
         }
 
-        // --- AJUSTE DOS IDS NUMÉRICOS EXATOS EXIGIDOS PELO SWAGGER ---
+        // --- RESOLUÇÃO DOS NOMES COM SUPORTE A TRAÇO (-) ---
         const fkProduto = parseInt(o.id_produtos ?? o.id_produto ?? 0, 10);
         const fkMaquina = parseInt(o.id_maquinas ?? o.id_maquina ?? 0, 10);
         const fkColaborador = parseInt(o.id_colaboradores ?? o.id_colaborador ?? 0, 10);
@@ -305,30 +315,31 @@ function renderizarTabelaOcorrencias(ocorrencias) {
         let produto = "-";
         if (fkProduto && window.listaDeProdutos) {
             const prodEnc = window.listaDeProdutos.find(p => (p.id_produtos || p.id_Produtos || p.id || p._id)?.toString() === fkProduto.toString());
-            if (prodEnc) produto = prodEnc.nome;
+            if (prodEnc && prodEnc.nome) produto = prodEnc.nome;
         }
 
         let maquina = "-";
         if (fkMaquina && window.listaDeMaquinas) {
             const maqEnc = window.listaDeMaquinas.find(m => (m.id_maquinas || m.id || m._id)?.toString() === fkMaquina.toString());
-            if (maqEnc) maquina = maqEnc.nome;
+            if (maqEnc && maqEnc.nome) maquina = maqEnc.nome;
         }
 
         let colaborador = "-";
         if (fkColaborador && window.listaDeColaboradores) {
             const colabEnc = window.listaDeColaboradores.find(c => (c.id_colaboradores || c.id_Colaboradores || c.id || c._id)?.toString() === fkColaborador.toString());
-            if (colabEnc) colaborador = colabEnc.nome;
+            if (colabEnc && colabEnc.nome) colaborador = colabEnc.nome;
         }
         
-        const lote = o.lote_produtos || o.lote_produto || o.lote || "-";
-        const problema = o.problema || o.falha_como || "-";
+        // Aplica o traço (-) caso o lote ou o problema venham vazios ou com "Não informado"
+        const lote = formatarComTraco(o.lote_produtos ?? o.lote_produto ?? o.lote);
+        const problema = formatarComTraco(o.problema ?? o.falha_como);
 
         const dataLimpaUrl = dataOriginalRaw ? dataOriginalRaw.toString().split('.')[0].replace(' ', 'T') : '';
         
         const caminhoFoto = o.foto || o.imagem || o.foto_ocorrencia || null;
         let iconeFotoHTML = `<span class="text-muted" title="Sem foto"><i class="bi bi-image-alt opacity-50"></i></span>`;
         
-        if (caminhoFoto) {
+        if (caminhoFoto && String(caminhoFoto).trim() !== "" && caminhoFoto !== "Não informado") {
             iconeFotoHTML = `
                 <button type="button" class="btn btn-sm btn-outline-secondary border-0" title="Visualizar Foto" 
                     onclick="let novaAba = window.open('about:blank', '_blank'); novaAba.document.write('<html><body style=\\'margin:0;display:flex;justify-content:center;align-items:center;background:#f0f2f5;\\'><img src=\\'${caminhoFoto}\\' style=\\'max-width:100%;max-height:100vh;object-fit:contain;\\'></body></html>');">
@@ -337,11 +348,10 @@ function renderizarTabelaOcorrencias(ocorrencias) {
             `;
         }
 
-        // MONTAGEM DO CORPO DA LINHA DA TABELA AJUSTADO COM AS CHAVES CORRETAS
         return `
             <tr class="align-middle">                
                 <td>${lote}</td>
-                <td><strong>${numeroOcoInt}</strong></td>            
+                <td><strong>${numeroOcoInt > 0 ? numeroOcoInt : "-"}</strong></td>            
                 <td>${dataFormatada}</td>
                 <td>${produto}</td>
                 <td>${maquina}</td>
@@ -350,13 +360,11 @@ function renderizarTabelaOcorrencias(ocorrencias) {
                 <td><span class="badge ${badgeClasse}">${textoSituacao}</span></td>
                 <td>${iconeFotoHTML}</td>
                 <td style="text-align: left; white-space: nowrap;">
-                    
                     <button type="button" class="btn btn-sm btn-outline-primary border-0" 
                             onclick="window.location.href='ocorrencias_editar.html?editar=true&numero_ocorrencias=${numeroOcoInt}&data_ocorrencias=${encodeURIComponent(dataLimpaUrl)}&id_maquinas=${fkMaquina}&id_colaboradores=${fkColaborador}&id_produtos=${fkProduto}'" 
                             title="Editar">
                         <i class="bi bi-pencil"></i>
                     </button>
-
                 </td>
             </tr>
         `;

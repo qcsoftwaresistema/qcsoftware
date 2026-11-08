@@ -136,36 +136,45 @@ function obterDataHoraAtualLocal() {
 }
 
 // =========================================================================
-// 1. CARREGAR OPÇÕES DO DATALIST DE MÁQUINAS
+// 1. CARREGAR SELECT DE MÁQUINAS
 // =========================================================================
 async function carregarMaquinasNoSelect() {
-    const inputBusca = document.getElementById('maquinas-nome-busca');
-    const datalist = document.getElementById('lista-maquinas-datalist');
-    const inputHidden = document.getElementById('maquinas-nome');
+    const elemento = document.getElementById('maquinas-nome') || 
+                     document.getElementById('maquinas-nome-busca') ||
+                     document.querySelector('select[name*="maquina"]') ||
+                     document.querySelector('select[id*="maquina"]');
 
-    if (!inputBusca || !datalist || !inputHidden) return;
+    if (!elemento) return;
 
     try {
-        const res = await fetch(`${API_URL}/maquinas/`, { cache: 'no-store' });
+        const perfilId = obterIdPerfilUsuarioLocal();
+        const res = await fetch(`${API_URL}/maquinas/`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            }
+        });
+
         if (res.ok) {
             const maquinas = await res.json();
             window.listaDeMaquinas = maquinas;
             maquinas.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
 
-            datalist.innerHTML = maquinas.map(m => 
-                `<option value="${m.nome}" data-id="${m.id_maquinas}"></option>`
-            ).join('');
+            // Se for um elemento <select> nativo
+            if (elemento.tagName === 'SELECT') {
+                elemento.innerHTML = '<option value="">Selecione a máquina...</option>' + 
+                    maquinas.map(m => `<option value="${m.id_maquinas ?? m.id}">${m.nome}</option>`).join('');
+            }
 
-            window.atualizarInputVisualMaquina = function(idAlvo) {
-                if (!idAlvo) { inputBusca.value = ""; inputHidden.value = ""; return; }
-                const opt = Array.from(datalist.options).find(o => o.getAttribute('data-id')?.toString() === idAlvo?.toString());
-                if (opt) { inputBusca.value = opt.value; inputHidden.value = idAlvo; }
-            };
-
-            inputBusca.addEventListener('input', function() {
-                const opt = Array.from(datalist.options).find(o => o.value.trim() === this.value.trim());
-                inputHidden.value = opt ? opt.getAttribute('data-id') : "";
-            });
+            // Suporte retrocompatível se houver datalist no DOM
+            const datalist = document.getElementById('lista-maquinas-datalist');
+            if (datalist) {
+                datalist.innerHTML = maquinas.map(m => 
+                    `<option value="${m.nome}" data-id="${m.id_maquinas ?? m.id}"></option>`
+                ).join('');
+            }
         }
     } catch (e) { 
         console.error("Erro ao carregar máquinas:", e); 
@@ -173,36 +182,45 @@ async function carregarMaquinasNoSelect() {
 }
 
 // =========================================================================
-// 1.1 CARREGAR OPÇÕES DO DATALIST DE COLABORADORES
+// 1.1 CARREGAR SELECT DE COLABORADORES
 // =========================================================================
 async function carregarColaboradoresNoSelect() {
-    const inputBusca = document.getElementById('colaboradores-nome-busca');
-    const datalist = document.getElementById('lista-colaboradores-datalist');
-    const inputHidden = document.getElementById('colaboradores-nome');
+    const elemento = document.getElementById('colaboradores-nome') || 
+                     document.getElementById('colaboradores-nome-busca') ||
+                     document.querySelector('select[name*="colaborador"]') ||
+                     document.querySelector('select[id*="colaborador"]');
 
-    if (!inputBusca || !datalist || !inputHidden) return;
+    if (!elemento) return;
 
     try {
-        const res = await fetch(`${API_URL}/colaboradores/`, { cache: 'no-store' });
+        const perfilId = obterIdPerfilUsuarioLocal();
+        const res = await fetch(`${API_URL}/colaboradores/`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            }
+        });
+
         if (res.ok) {
             const colaboradores = await res.json();
             window.listaDeColaboradores = colaboradores;
             colaboradores.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
 
-            datalist.innerHTML = colaboradores.map(c => 
-                `<option value="${c.nome}" data-id="${c.id_colaboradores}"></option>`
-            ).join('');
+            // Se for um elemento <select> nativo
+            if (elemento.tagName === 'SELECT') {
+                elemento.innerHTML = '<option value="">Selecione o colaborador...</option>' + 
+                    colaboradores.map(c => `<option value="${c.id_colaboradores ?? c.id}">${c.nome}</option>`).join('');
+            }
 
-            window.atualizarInputVisualColaboradores = function(idAlvo) {
-                if (!idAlvo) { inputBusca.value = ""; inputHidden.value = ""; return; }
-                const opt = Array.from(datalist.options).find(o => o.getAttribute('data-id')?.toString() === idAlvo?.toString());
-                if (opt) { inputBusca.value = opt.value; inputHidden.value = idAlvo; }
-            };
-
-            inputBusca.addEventListener('input', function() {
-                const opt = Array.from(datalist.options).find(o => o.value.trim() === this.value.trim());
-                inputHidden.value = opt ? opt.getAttribute('data-id') : "";
-            });
+            // Suporte retrocompatível se houver datalist no DOM
+            const datalist = document.getElementById('lista-colaboradores-datalist');
+            if (datalist) {
+                datalist.innerHTML = colaboradores.map(c => 
+                    `<option value="${c.nome}" data-id="${c.id_colaboradores ?? c.id}"></option>`
+                ).join('');
+            }
         }
     } catch (e) { 
         console.error("Erro ao carregar colaboradores:", e); 
@@ -210,36 +228,45 @@ async function carregarColaboradoresNoSelect() {
 }
 
 // =========================================================================
-// 1.2 CARREGAR OPÇÕES DO DATALIST DE PRODUTOS
+// 1.2 CARREGAR SELECT DE PRODUTOS
 // =========================================================================
 async function carregarProdutosNoSelect() {
-    const inputBusca = document.getElementById('produtos-nome-busca');
-    const datalist = document.getElementById('lista-produtos-datalist');
-    const inputHidden = document.getElementById('produtos-nome');
+    const elemento = document.getElementById('produtos-nome') || 
+                     document.getElementById('produtos-nome-busca') ||
+                     document.querySelector('select[name*="produto"]') ||
+                     document.querySelector('select[id*="produto"]');
 
-    if (!inputBusca || !datalist || !inputHidden) return;
+    if (!elemento) return;
 
     try {
-        const res = await fetch(`${API_URL}/produtos/`, { cache: 'no-store' });
+        const perfilId = obterIdPerfilUsuarioLocal();
+        const res = await fetch(`${API_URL}/produtos/`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            }
+        });
+
         if (res.ok) {
             const produtos = await res.json();
             window.listaDeProdutos = produtos;
             produtos.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
 
-            datalist.innerHTML = produtos.map(p => 
-                `<option value="${p.nome}" data-id="${p.id_produtos}"></option>`
-            ).join('');
+            // Se for um elemento <select> nativo
+            if (elemento.tagName === 'SELECT') {
+                elemento.innerHTML = '<option value="">Selecione o produto...</option>' + 
+                    produtos.map(p => `<option value="${p.id_produtos ?? p.id}">${p.nome}</option>`).join('');
+            }
 
-            window.atualizarInputVisualProdutos = function(idAlvo) {
-                if (!idAlvo) { inputBusca.value = ""; inputHidden.value = ""; return; }
-                const opt = Array.from(datalist.options).find(o => o.getAttribute('data-id')?.toString() === idAlvo?.toString());
-                if (opt) { inputBusca.value = opt.value; inputHidden.value = idAlvo; }
-            };
-
-            inputBusca.addEventListener('input', function() {
-                const opt = Array.from(datalist.options).find(o => o.value.trim() === this.value.trim());
-                inputHidden.value = opt ? opt.getAttribute('data-id') : "";
-            });
+            // Suporte retrocompatível se houver datalist no DOM
+            const datalist = document.getElementById('lista-produtos-datalist');
+            if (datalist) {
+                datalist.innerHTML = produtos.map(p => 
+                    `<option value="${p.nome}" data-id="${p.id_produtos ?? p.id}"></option>`
+                ).join('');
+            }
         }
     } catch (e) { 
         console.error("Erro ao carregar produtos:", e); 
