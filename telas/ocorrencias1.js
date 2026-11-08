@@ -117,7 +117,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Otimização: Dispara a busca do CRUD em paralelo com os selects para abrir mais rápido
     const promessaOcorrencias = listarOcorrenciasCRUD();
 
-    // 3. Inicializa os selects e datalists dinâmicos usando await com segurança
+    // 3. Inicializa primeiro os selects e dicionários de dados
     try {
         await Promise.all([
             carregarMaquinasNoSelect(),
@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error("Erro crítico ao carregar seletores dinâmicos:", e);
     }
 
+    // 4. Executa a listagem da tabela apenas após os dados dos relacionamentos estarem carregados
     try {
         await listarOcorrenciasCRUD();
     } catch (e) {
@@ -257,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // =========================================================================
-// RENDERIZAÇÃO EM TELA DO HTML COM TRATAMENTO DE TRAÇO (-)
+// RENDERIZAÇÃO EM TELA DO HTML COM TRATAMENTO DE TRAÇO (-) DEFINITIVO
 // =========================================================================
 function renderizarTabelaOcorrencias(ocorrencias) {
     const tabela = document.getElementById('tabela-ocorrencias');
@@ -268,23 +269,30 @@ function renderizarTabelaOcorrencias(ocorrencias) {
         return;
     }
 
-    // Função auxiliar para sanitizar e exibir traço (-) quando o campo estiver vazio ou padrão
-    const formatarComTraco = (valor) => {
+    // Função para tratar valores vazios, zerados ou marcados como "não informado"
+    const formatarTextoComTraco = (valor) => {
         if (valor === undefined || valor === null) return "-";
         const str = String(valor).trim();
-        if (str === "" || str === "0" || str.toLowerCase() === "não informado" || str.toLowerCase() === "nao informado") {
+        if (
+            str === "" || 
+            str === "0" || 
+            str.toLowerCase() === "não informado" || 
+            str.toLowerCase() === "nao informado" || 
+            str.toLowerCase() === "null" || 
+            str.toLowerCase() === "undefined"
+        ) {
             return "-";
         }
         return str;
     };
 
     tabela.innerHTML = ocorrencias.map(o => {
-        // Captura o número identificador real
+        // 1. Identificador da ocorrência
         let idBruto = o.numero_ocorrencias ?? o.id ?? o.id_ocorrencias ?? 0;
         const numeroOcoInt = parseInt(idBruto, 10) || 0;
 
+        // 2. Situação / Badge
         const textoSituacao = o.situacao || (o.ativo === false || o.ativo === "false" ? "Inativo" : "Ativo");
-        
         let badgeClasse = 'bg-secondary-subtle text-secondary';
         const statusNormalizado = String(textoSituacao).toLowerCase().trim();
 
@@ -296,50 +304,64 @@ function renderizarTabelaOcorrencias(ocorrencias) {
             badgeClasse = 'bg-success-subtle text-success';
         }
 
+        // 3. Formatação da Data/Hora
         let dataOriginalRaw = o.data_ocorrencias ?? o.data_ocorrencia ?? o.data ?? "";
         let dataFormatada = "-";
         if (dataOriginalRaw && dataOriginalRaw !== "-") {
             try {
                 const dataObjeto = new Date(dataOriginalRaw.replace(' ', 'T'));
                 if (!isNaN(dataObjeto)) {
-                    dataFormatada = dataObjeto.toLocaleDateString('pt-BR') + ' ' + dataObjeto.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    dataFormatada = dataObjeto.toLocaleDateString('pt-BR') + ' ' + 
+                                    dataObjeto.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
                 }
             } catch (e) { }
         }
 
-        // --- RESOLUÇÃO DOS NOMES COM SUPORTE A TRAÇO (-) ---
-        const fkProduto = parseInt(o.id_produtos ?? o.id_produto ?? 0, 10);
-        const fkMaquina = parseInt(o.id_maquinas ?? o.id_maquina ?? 0, 10);
-        const fkColaborador = parseInt(o.id_colaboradores ?? o.id_colaborador ?? 0, 10);
+        // 4. Resolução dos IDs
+        const fkProduto = o.id_produtos ?? o.id_produto ?? 0;
+        const fkMaquina = o.id_maquinas ?? o.id_maquina ?? 0;
+        const fkColaborador = o.id_colaboradores ?? o.id_colaborador ?? 0;
 
-        let produto = "-";
-        if (fkProduto && window.listaDeProdutos) {
-            const prodEnc = window.listaDeProdutos.find(p => (p.id_produtos || p.id_Produtos || p.id || p._id)?.toString() === fkProduto.toString());
+        // 5. Resolução de Nomes: prioriza string direta da API, caso contrário busca no array global
+        let produto = o.nome_produto || o.produto_nome || o.produto || "-";
+        if ((produto === "-" || !isNaN(produto)) && fkProduto && window.listaDeProdutos) {
+            const prodEnc = window.listaDeProdutos.find(p => 
+                String(p.id_produtos ?? p.id_Produtos ?? p.id ?? p._id) === String(fkProduto)
+            );
             if (prodEnc && prodEnc.nome) produto = prodEnc.nome;
         }
+        produto = formatarTextoComTraco(produto);
 
-        let maquina = "-";
-        if (fkMaquina && window.listaDeMaquinas) {
-            const maqEnc = window.listaDeMaquinas.find(m => (m.id_maquinas || m.id || m._id)?.toString() === fkMaquina.toString());
+        let maquina = o.nome_maquina || o.maquina_nome || o.maquina || "-";
+        if ((maquina === "-" || !isNaN(maquina)) && fkMaquina && window.listaDeMaquinas) {
+            const maqEnc = window.listaDeMaquinas.find(m => 
+                String(m.id_maquinas ?? m.id_Maquinas ?? m.id ?? m._id) === String(fkMaquina)
+            );
             if (maqEnc && maqEnc.nome) maquina = maqEnc.nome;
         }
+        maquina = formatarTextoComTraco(maquina);
 
-        let colaborador = "-";
-        if (fkColaborador && window.listaDeColaboradores) {
-            const colabEnc = window.listaDeColaboradores.find(c => (c.id_colaboradores || c.id_Colaboradores || c.id || c._id)?.toString() === fkColaborador.toString());
+        let colaborador = o.nome_colaborador || o.colaborador_nome || o.colaborador || "-";
+        if ((colaborador === "-" || !isNaN(colaborador)) && fkColaborador && window.listaDeColaboradores) {
+            const colabEnc = window.listaDeColaboradores.find(c => 
+                String(c.id_colaboradores ?? c.id_Colaboradores ?? c.id ?? c._id) === String(fkColaborador)
+            );
             if (colabEnc && colabEnc.nome) colaborador = colabEnc.nome;
         }
-        
-        // Aplica o traço (-) caso o lote ou o problema venham vazios ou com "Não informado"
-        const lote = formatarComTraco(o.lote_produtos ?? o.lote_produto ?? o.lote);
-        const problema = formatarComTraco(o.problema ?? o.falha_como);
+        colaborador = formatarTextoComTraco(colaborador);
 
+        // 6. Resolução de Lote e Ocorrência (Descrição/Problema)
+        const lote = formatarTextoComTraco(o.lote_produtos ?? o.lote_produto ?? o.lote);
+        const ocorrenciaDescricao = formatarTextoComTraco(
+            o.ocorrencia ?? o.problema ?? o.descricao ?? o.falha_como ?? o.motivo
+        );
+
+        // 7. Tratamento de Foto
         const dataLimpaUrl = dataOriginalRaw ? dataOriginalRaw.toString().split('.')[0].replace(' ', 'T') : '';
-        
         const caminhoFoto = o.foto || o.imagem || o.foto_ocorrencia || null;
         let iconeFotoHTML = `<span class="text-muted" title="Sem foto"><i class="bi bi-image-alt opacity-50"></i></span>`;
-        
-        if (caminhoFoto && String(caminhoFoto).trim() !== "" && caminhoFoto !== "Não informado") {
+
+        if (caminhoFoto && String(caminhoFoto).trim() !== "" && caminhoFoto !== "Não informado" && caminhoFoto !== "-") {
             iconeFotoHTML = `
                 <button type="button" class="btn btn-sm btn-outline-secondary border-0" title="Visualizar Foto" 
                     onclick="let novaAba = window.open('about:blank', '_blank'); novaAba.document.write('<html><body style=\\'margin:0;display:flex;justify-content:center;align-items:center;background:#f0f2f5;\\'><img src=\\'${caminhoFoto}\\' style=\\'max-width:100%;max-height:100vh;object-fit:contain;\\'></body></html>');">
@@ -355,7 +377,7 @@ function renderizarTabelaOcorrencias(ocorrencias) {
                 <td>${dataFormatada}</td>
                 <td>${produto}</td>
                 <td>${maquina}</td>
-                <td>${problema}</td>
+                <td>${ocorrenciaDescricao}</td>
                 <td>${colaborador}</td>
                 <td><span class="badge ${badgeClasse}">${textoSituacao}</span></td>
                 <td>${iconeFotoHTML}</td>
@@ -649,16 +671,25 @@ async function carregarMaquinasNoSelect() {
     const inputIdOculto = document.getElementById('maquinas-nome') || document.querySelector('input[id*="maquinas"]:not([id*="situacao"])');
 
     try {
-        const res = await fetch(`${API_URL}/maquinas/`, { cache: 'no-store' });
+        const perfilId = typeof obterIdPerfilUsuario === 'function' ? obterIdPerfilUsuario() : (PERFIL_USUARIO || null);
+        const res = await fetch(`${API_URL}/maquinas/`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            }
+        });
+
         if (res.ok) {
             const maquinas = await res.json();
-            window.listaDeMaquinas = maquinas; 
+            window.listaDeMaquinas = Array.isArray(maquinas) ? maquinas : []; 
 
             if (!inputBusca || !datalistMaquinas || !inputIdOculto) return;
-            maquinas.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+            window.listaDeMaquinas.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
             inputBusca.setAttribute('list', 'lista-maquinas-datalist');
 
-            datalistMaquinas.innerHTML = maquinas.map(m => {
+            datalistMaquinas.innerHTML = window.listaDeMaquinas.map(m => {
                 const id_Maquinas = m.id_maquinas || m.id || m._id;
                 return `<option value="${m.nome}" data-id="${id_Maquinas}"></option>`;
             }).join('');
@@ -670,7 +701,9 @@ async function carregarMaquinasNoSelect() {
                 else if (valorDigitado === "") inputIdOculto.value = "";
             });
         }
-    } catch (e) { console.error("Erro ao carregar máquinas:", e); }
+    } catch (e) { 
+        console.error("Erro ao carregar máquinas:", e); 
+    }
 }
 
 async function carregarColaboradoresNoSelect() {
@@ -679,16 +712,25 @@ async function carregarColaboradoresNoSelect() {
     const inputIdOculto = document.getElementById('colaboradores-nome') || document.querySelector('input[id*="colaboradores"]:not([id*="situacao"])');
 
     try {
-        const res = await fetch(`${API_URL}/colaboradores/`, { cache: 'no-store' });
+        const perfilId = typeof obterIdPerfilUsuario === 'function' ? obterIdPerfilUsuario() : (PERFIL_USUARIO || null);
+        const res = await fetch(`${API_URL}/colaboradores/`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            }
+        });
+
         if (res.ok) {
             const colaboradores = await res.json();
-            window.listaDeColaboradores = colaboradores; 
+            window.listaDeColaboradores = Array.isArray(colaboradores) ? colaboradores : []; 
 
             if (!inputBusca || !datalistColaboradores || !inputIdOculto) return;
-            colaboradores.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+            window.listaDeColaboradores.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
             inputBusca.setAttribute('list', 'lista-colaboradores-datalist');
 
-            datalistColaboradores.innerHTML = colaboradores.map(c => {
+            datalistColaboradores.innerHTML = window.listaDeColaboradores.map(c => {
                 const id_Colaboradores = c.id_colaboradores || c.id_Colaboradores || c.id || c._id;
                 return `<option value="${c.nome}" data-id="${id_Colaboradores}"></option>`;
             }).join('');
@@ -700,7 +742,9 @@ async function carregarColaboradoresNoSelect() {
                 else if (valorDigitado === "") inputIdOculto.value = "";
             });
         }
-    } catch (e) { console.error("Erro ao carregar colaboradores:", e); }
+    } catch (e) { 
+        console.error("Erro ao carregar colaboradores:", e); 
+    }
 }
 
 async function carregarProdutosNoSelect() {
@@ -709,16 +753,25 @@ async function carregarProdutosNoSelect() {
     const inputIdOculto = document.getElementById('produtos-nome') || document.querySelector('input[id*="produtos"]:not([id*="situacao"])');
 
     try {
-        const res = await fetch(`${API_URL}/produtos/`, { cache: 'no-store' });
+        const perfilId = typeof obterIdPerfilUsuario === 'function' ? obterIdPerfilUsuario() : (PERFIL_USUARIO || null);
+        const res = await fetch(`${API_URL}/produtos/`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            }
+        });
+
         if (res.ok) {
             const produtos = await res.json();
-            window.listaDeProdutos = produtos; 
+            window.listaDeProdutos = Array.isArray(produtos) ? produtos : []; 
 
             if (!inputBusca || !datalistProdutos || !inputIdOculto) return;
-            produtos.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+            window.listaDeProdutos.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
             inputBusca.setAttribute('list', 'lista-produtos-datalist');
 
-            datalistProdutos.innerHTML = produtos.map(p => {
+            datalistProdutos.innerHTML = window.listaDeProdutos.map(p => {
                 const id_Produtos = p.id_produtos || p.id_Produtos || p.id || p._id;
                 return `<option value="${p.nome}" data-id="${id_Produtos}"></option>`;
             }).join('');
@@ -730,7 +783,9 @@ async function carregarProdutosNoSelect() {
                 else if (valorDigitado === "") inputIdOculto.value = "";
             });
         }
-    } catch (e) { console.error("Erro ao carregar produtos:", e); }
+    } catch (e) { 
+        console.error("Erro ao carregar produtos:", e); 
+    }
 }
 
 // =========================================================================
