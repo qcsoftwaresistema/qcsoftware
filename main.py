@@ -20,18 +20,51 @@ from urllib.request import Request, urlopen
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+import unicodedata
+
+def normalizar_texto(texto: str) -> str:
+    """Remove acentos, espaços extras e converte para minúsculas."""
+    if not texto:
+        return ""
+    texto_sem_acento = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('ASCII')
+    return texto_sem_acento.strip().lower()
+
 # ==========================================
-# FUNÇÃO DE VALIDAÇÃO DE PERMISSÕES (CORRIGIDA)
+# FUNÇÃO DE VALIDAÇÃO DE PERMISSÕES (CORRIGIDA DEFINITIVA)
 # ==========================================
 def verificar_permissao_tela(tela_nome: str, acao: str):
-    def dependency(x_perfil_id: int = Header(default=None), db: Session = Depends(get_db)):
+    def dependency(
+        x_perfil_id: int = Header(default=None, alias="x-perfil-id"), 
+        db: Session = Depends(get_db)
+    ):
         if not x_perfil_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Perfil do usuário não identificado no cabeçalho.")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="Perfil do usuário não identificado no cabeçalho."
+            )
             
-        # 1. Busca a tela pelo nome (CORREÇÃO: ignorando case-sensitive)
-        tela = db.query(models.Tela).filter(func.lower(models.Tela.nome) == tela_nome.lower()).first()
+        # 1. Busca todas as telas e localiza ignorando acentos, maiúsculas e singular/plural
+        alvo = normalizar_texto(tela_nome)
+        todas_telas = db.query(models.Tela).all()
+        
+        tela = None
+        for t in todas_telas:
+            nome_banco = normalizar_texto(t.nome)
+            # Casa 'maquinas' com 'máquinas', 'maquina', 'tela_maquinas'
+            if (
+                nome_banco == alvo 
+                or nome_banco.rstrip('s') == alvo.rstrip('s')
+                or alvo in nome_banco 
+                or nome_banco in alvo
+            ):
+                tela = t
+                break
+
         if not tela:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tela '{tela_nome}' não encontrada no sistema.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail=f"Acesso negado: Tela '{tela_nome}' não localizada no banco de dados."
+            )
             
         # 2. Busca a permissão vinculada ao perfil e à tela
         permissao = db.query(models.Permissao).filter(
@@ -41,17 +74,27 @@ def verificar_permissao_tela(tela_nome: str, acao: str):
         ).first()
 
         if not permissao:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado: Nenhuma permissão configurada para esta tela.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail=f"Acesso negado: Nenhuma permissão configurada para o perfil {x_perfil_id} na tela {tela_nome}."
+            )
 
         # 3. Verifica a ação específica
         tem_acesso = False
-        if acao == "visualizar" and permissao.visualizar: tem_acesso = True
-        elif acao == "inserir" and permissao.inserir: tem_acesso = True
-        elif acao == "alterar" and permissao.alterar: tem_acesso = True
-        elif acao == "excluir" and permissao.excluir: tem_acesso = True
+        if acao == "visualizar" and permissao.visualizar: 
+            tem_acesso = True
+        elif acao == "inserir" and permissao.inserir: 
+            tem_acesso = True
+        elif acao == "alterar" and permissao.alterar: 
+            tem_acesso = True
+        elif acao == "excluir" and permissao.excluir: 
+            tem_acesso = True
 
         if not tem_acesso:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Acesso negado: Você não tem permissão para {acao} na tela {tela_nome}.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail=f"Acesso negado: Você não tem permissão para {acao} na tela {tela_nome}."
+            )
             
         return True
     return dependency
