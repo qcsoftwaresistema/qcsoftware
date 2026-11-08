@@ -204,8 +204,9 @@ def deletar_produto(id: int, db: Session = Depends(get_db)):
     return {"status": "Produto deletado com sucesso"}
 
 # ==========================================
-# 3. MÁQUINAS (Com validação de permissões)
+# 3. MÁQUINAS (Com suporte a rota com/sem barra)
 # ==========================================
+@app.get("/maquinas", response_model=List[schemas.Maquina], tags=["Máquinas"], include_in_schema=False, dependencies=[Depends(verificar_permissao_tela("Máquinas", "visualizar"))])
 @app.get("/maquinas/", response_model=List[schemas.Maquina], tags=["Máquinas"], dependencies=[Depends(verificar_permissao_tela("Máquinas", "visualizar"))])
 def listar_maquinas(db: Session = Depends(get_db)):
     return db.query(models.Maquina).all()
