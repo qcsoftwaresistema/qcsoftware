@@ -50,7 +50,7 @@ async function inicializarTelaProdutos() {
             let idTelaProdutos = 51; // ID padrão da tela de Produtos no seu banco de dados
             
             try {
-                const resTelas = await fetch("https://sistema.qcsoftware.com.br/telas/");
+                const resTelas = await fetch(`${API_URL}/tela/`);
                 if (resTelas.ok) {
                     const listaTelas = await resTelas.json();
                     const telaProd = listaTelas.find(t => t.nome && t.nome.toLowerCase() === "produtos");
@@ -573,7 +573,7 @@ async function inicializarTelaCargos() {
             let idTelaCargos = 52; 
 
             try {
-                const resTelas = await fetch("https://sistema.qcsoftware.com.br/telas/");
+                const resTelas = await fetch(`${API_URL}/tela/`);
                 if (resTelas.ok) {
                     const listaTelas = await resTelas.json();
                     const telaEncontrada = listaTelas.find(t => t.nome && t.nome.toLowerCase() === "cargos");
@@ -1045,7 +1045,7 @@ async function inicializarTelaMaquinas() {
             let idTelaMaquinas = 50; 
 
             try {
-                const resTelas = await fetch(`${API_URL}/telas/`).catch(() => fetch(`${API_URL}/tela/`));
+                const resTelas = await fetch(`${API_URL}/tela/`);
                 if (resTelas && resTelas.ok) {
                     const listaTelas = await resTelas.json();
                     const telaEncontrada = listaTelas.find(t => 
@@ -1157,14 +1157,22 @@ async function listarMaquinasCRUD() {
             tabela.innerHTML = `<tr><td colspan="4" class="text-center py-4">Carregando máquinas...</td></tr>`;
         }
 
-        const res = await fetch(`${API_URL}/maquinas/`, {
-            method: 'GET',
-            cache: 'no-store'
-        });
-        
-        if (!res.ok) {
-            throw new Error(`Erro no servidor: Status ${res.status}`);
-        }
+        const perfilId = typeof PERFIL_USUARIO !== 'undefined' && PERFIL_USUARIO !== null 
+          ? PERFIL_USUARIO 
+          : obterIdPerfilUsuario();
+
+      const res = await fetch(`${API_URL}/maquinas/`, {
+          method: 'GET',
+          cache: 'no-store',
+          headers: {
+              'Content-Type': 'application/json',
+              'x-perfil-id': perfilId ? perfilId.toString() : ""
+          }
+      });
+
+      if (!res.ok) {
+          throw new Error(`Erro no servidor: Status ${res.status}`);
+      }
 
         todasMaquinas = await res.json();
         
@@ -1575,7 +1583,7 @@ async function inicializarTelaColaboradores() {
             let idTelaColaboradores = 53; 
 
             try {
-                const resTelas = await fetch("https://sistema.qcsoftware.com.br/telas/");
+                const resTelas = await fetch(`${API_URL}/tela/`);
                 if (resTelas.ok) {
                     const listaTelas = await resTelas.json();
                     const telaEncontrada = listaTelas.find(t => t.nome && t.nome.toLowerCase() === "colaboradores");
@@ -1729,12 +1737,20 @@ async function listarColaboradoresCRUD() {
             console.warn("Aviso: Falha ao atualizar lista de cargos para mapeamento:", erroCargos);
         }
 
-        const res = await fetch(`${API_URL}/colaboradores/`, {
-            method: 'GET',
-            cache: 'no-store'
-        });
-        
-        if (!res.ok) throw new Error(`Erro no servidor: Status ${res.status}`);
+        const perfilId = typeof PERFIL_USUARIO !== 'undefined' && PERFIL_USUARIO !== null 
+          ? PERFIL_USUARIO 
+          : obterIdPerfilUsuario();
+
+      const res = await fetch(`${API_URL}/colaboradores/`, {
+          method: 'GET',
+          cache: 'no-store',
+          headers: {
+              'Content-Type': 'application/json',
+              'x-perfil-id': perfilId ? perfilId.toString() : ""
+          }
+      });
+
+      if (!res.ok) throw new Error(`Erro no servidor: Status ${res.status}`);
 
         todosColaboradores = await res.json();
         
