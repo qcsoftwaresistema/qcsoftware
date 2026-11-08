@@ -1,7 +1,7 @@
 from datetime import datetime
 from multiprocessing import get_context
 import os
-from fastapi import APIRouter, BackgroundTasks, FastAPI, Depends, HTTPException, logger, status
+from fastapi import APIRouter, BackgroundTasks, FastAPI, Depends, HTTPException, logger, status, Header
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, EmailStr
 import hashlib
@@ -19,6 +19,43 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+# ==========================================
+# FUNÇÃO DE VALIDAÇÃO DE PERMISSÕES (CORRIGIDA)
+# ==========================================
+def verificar_permissao_tela(tela_nome: str, acao: str):
+    def dependency(x_perfil_id: int = Header(default=None), db: Session = Depends(get_db)):
+        if not x_perfil_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Perfil do usuário não identificado no cabeçalho.")
+            
+        # 1. Busca a tela pelo nome (CORREÇÃO: ignorando case-sensitive)
+        tela = db.query(models.Tela).filter(func.lower(models.Tela.nome) == tela_nome.lower()).first()
+        if not tela:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tela '{tela_nome}' não encontrada no sistema.")
+            
+        # 2. Busca a permissão vinculada ao perfil e à tela
+        permissao = db.query(models.Permissao).filter(
+            models.Permissao.id_perfis == x_perfil_id,
+            models.Permissao.id_telas == tela.id_telas,
+            models.Permissao.ativo == True
+        ).first()
+
+        if not permissao:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado: Nenhuma permissão configurada para esta tela.")
+
+        # 3. Verifica a ação específica
+        tem_acesso = False
+        if acao == "visualizar" and permissao.visualizar: tem_acesso = True
+        elif acao == "inserir" and permissao.inserir: tem_acesso = True
+        elif acao == "alterar" and permissao.alterar: tem_acesso = True
+        elif acao == "excluir" and permissao.excluir: tem_acesso = True
+
+        if not tem_acesso:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Acesso negado: Você não tem permissão para {acao} na tela {tela_nome}.")
+            
+        return True
+    return dependency
+
 try:
     # Importa passlib apenas quando estiver instalado no ambiente.
     CryptContext = importlib.import_module("passlib.context").CryptContext
@@ -127,13 +164,13 @@ def deletar_cargo(id: int, db: Session = Depends(get_db)):
     return {"status": "Cargo deletado com sucesso"}
 
 # ==========================================
-# 2. PRODUTOS
+# 2. PRODUTOS (Com validação de permissões)
 # ==========================================
-@app.get("/produtos/", response_model=List[schemas.Produto], tags=["Produtos"])
+@app.get("/produtos/", response_model=List[schemas.Produto], tags=["Produtos"], dependencies=[Depends(verificar_permissao_tela("Produtos", "visualizar"))])
 def listar_produtos(db: Session = Depends(get_db)):
     return db.query(models.Produto).all()
 
-@app.post("/produtos/", response_model=schemas.Produto, tags=["Produtos"])
+@app.post("/produtos/", response_model=schemas.Produto, tags=["Produtos"], dependencies=[Depends(verificar_permissao_tela("Produtos", "inserir"))])
 def criar_produto(obj: schemas.ProdutoCreate, db: Session = Depends(get_db)):
     novo = models.Produto(**obj.model_dump())
     db.add(novo)
@@ -141,30 +178,25 @@ def criar_produto(obj: schemas.ProdutoCreate, db: Session = Depends(get_db)):
     db.refresh(novo)
     return novo
 
-@app.put("/produtos/{id}", response_model=schemas.Produto, tags=["Produtos"])
+@app.put("/produtos/{id}", response_model=schemas.Produto, tags=["Produtos"], dependencies=[Depends(verificar_permissao_tela("Produtos", "alterar"))])
 def atualizar_produto(id: int, obj: schemas.ProdutoUpdate, db: Session = Depends(get_db)):
-    # 1. Busca o produto no banco pelo ID correto
     db_obj = db.query(models.Produto).filter(models.Produto.id_produtos == id).first()
     
     if not db_obj:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     
-    # 2. Atualiza os campos de texto e categoria se forem enviados
     if obj.nome is not None:
         db_obj.nome = obj.nome
     if obj.categoria is not None:
         db_obj.categoria = obj.categoria
-        
-    # 3. CORREÇÃO CRÍTICA: Atualiza o booleano 'ativo' mesmo se ele for False
     if obj.ativo is not None:
         db_obj.ativo = obj.ativo
 
-    # 4. Grava em definitivo no banco de dados
     db.commit()
     db.refresh(db_obj)
     return db_obj
 
-@app.delete("/produtos/{id}", tags=["Produtos"])
+@app.delete("/produtos/{id}", tags=["Produtos"], dependencies=[Depends(verificar_permissao_tela("Produtos", "excluir"))])
 def deletar_produto(id: int, db: Session = Depends(get_db)):
     db_obj = db.query(models.Produto).filter(models.Produto.id_produtos == id).first()
     db.delete(db_obj)
@@ -172,13 +204,13 @@ def deletar_produto(id: int, db: Session = Depends(get_db)):
     return {"status": "Produto deletado com sucesso"}
 
 # ==========================================
-# 3. MÁQUINAS
+# 3. MÁQUINAS (Com validação de permissões)
 # ==========================================
-@app.get("/maquinas/", response_model=List[schemas.Maquina], tags=["Máquinas"])
+@app.get("/maquinas/", response_model=List[schemas.Maquina], tags=["Máquinas"], dependencies=[Depends(verificar_permissao_tela("Máquinas", "visualizar"))])
 def listar_maquinas(db: Session = Depends(get_db)):
     return db.query(models.Maquina).all()
 
-@app.post("/maquinas/", response_model=schemas.Maquina, tags=["Máquinas"])
+@app.post("/maquinas/", response_model=schemas.Maquina, tags=["Máquinas"], dependencies=[Depends(verificar_permissao_tela("Máquinas", "inserir"))])
 def criar_maquina(obj: schemas.MaquinaCreate, db: Session = Depends(get_db)):
     novo = models.Maquina(**obj.model_dump())
     db.add(novo)
@@ -186,7 +218,7 @@ def criar_maquina(obj: schemas.MaquinaCreate, db: Session = Depends(get_db)):
     db.refresh(novo)
     return novo
 
-@app.put("/maquinas/{id}", response_model=schemas.Maquina, tags=["Máquinas"])
+@app.put("/maquinas/{id}", response_model=schemas.Maquina, tags=["Máquinas"], dependencies=[Depends(verificar_permissao_tela("Máquinas", "alterar"))])
 def atualizar_maquina(id: int, obj: schemas.MaquinaUpdate, db: Session = Depends(get_db)):
     # 1. Busca a máquina no banco pelo ID correto
     db_obj = db.query(models.Maquina).filter(models.Maquina.id_maquinas == id).first()
@@ -207,7 +239,7 @@ def atualizar_maquina(id: int, obj: schemas.MaquinaUpdate, db: Session = Depends
     db.refresh(db_obj)
     return db_obj
 
-@app.delete("/maquinas/{id}", tags=["Máquinas"])
+@app.delete("/maquinas/{id}", tags=["Máquinas"], dependencies=[Depends(verificar_permissao_tela("Máquinas", "excluir"))])
 def deletar_maquina(id: int, db: Session = Depends(get_db)):
     db_obj = db.query(models.Maquina).filter(models.Maquina.id_maquinas == id).first()
     db.delete(db_obj)
@@ -361,11 +393,11 @@ def deletar_ocorrencia(
 # ==========================================
 # 5. COLABORADORES
 # ==========================================
-@app.get("/colaboradores/", response_model=List[schemas.Colaborador], tags=["Colaboradores"])
+@app.get("/colaboradores/", response_model=List[schemas.Colaborador], tags=["Colaboradores"], dependencies=[Depends(verificar_permissao_tela("Colaboradores", "visualizar"))])
 def listar_colaboradores(db: Session = Depends(get_db)):
     return db.query(models.Colaborador).all()
 
-@app.post("/colaboradores/", response_model=schemas.Colaborador, tags=["Colaboradores"])
+@app.post("/colaboradores/", response_model=schemas.Colaborador, tags=["Colaboradores"], dependencies=[Depends(verificar_permissao_tela("Colaboradores", "inserir"))])
 def criar_colaborador(obj: schemas.ColaboradorCreate, db: Session = Depends(get_db)):
     novo = models.Colaborador(**obj.model_dump())
     db.add(novo)
@@ -373,7 +405,7 @@ def criar_colaborador(obj: schemas.ColaboradorCreate, db: Session = Depends(get_
     db.refresh(novo)
     return novo  
 
-@app.put("/colaboradores/{id}", response_model=schemas.Colaborador, tags=["Colaboradores"])
+@app.put("/colaboradores/{id}", response_model=schemas.Colaborador, tags=["Colaboradores"], dependencies=[Depends(verificar_permissao_tela("Colaboradores", "alterar"))])
 def atualizar_colaborador(id: int, obj: schemas.ColaboradorUpdate, db: Session = Depends(get_db)):
     # 1. Busca o colaborador no banco pelo ID correto
     db_obj = db.query(models.Colaborador).filter(models.Colaborador.id_colaboradores == id).first()
@@ -402,9 +434,13 @@ def atualizar_colaborador(id: int, obj: schemas.ColaboradorUpdate, db: Session =
     db.refresh(db_obj)
     return db_obj
 
-@app.delete("/colaboradores/{id}", tags=["Colaboradores"])
+@app.delete("/colaboradores/{id}", tags=["Colaboradores"], dependencies=[Depends(verificar_permissao_tela("Colaboradores", "excluir"))])
 def deletar_colaborador(id: int, db: Session = Depends(get_db)):
     db_obj = db.query(models.Colaborador).filter(models.Colaborador.id_colaboradores == id).first()
+    
+    if not db_obj:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado")
+        
     db.delete(db_obj)
     db.commit()
     return {"status": "Colaborador deletado com sucesso"}
@@ -426,29 +462,35 @@ def criar_usuario(obj: schemas.UsuarioCreate, db: Session = Depends(get_db)):
 
 @app.put("/usuarios/{id}", response_model=schemas.Usuario, tags=["Usuários"])
 def atualizar_usuario(id: int, obj: schemas.UsuarioUpdate, db: Session = Depends(get_db)):
-    # 1. Busca o usuário no banco pelo ID correto
+    # 1. Busca o usuário no banco pelo ID correto (com fallback para .id caso a coluna varie no model)
     db_obj = db.query(models.Usuario).filter(models.Usuario.id_usuarios == id).first()
+    if not db_obj and hasattr(models.Usuario, "id"):
+        db_obj = db.query(models.Usuario).filter(models.Usuario.id == id).first()
     
     if not db_obj:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     
-    # 2. Atualiza apenas os campos de texto e relacionamentos enviados
+    # 2. Atualização dos campos enviados
     if obj.usuario is not None:
         db_obj.usuario = obj.usuario
     if obj.id_perfis is not None:
         db_obj.id_perfis = obj.id_perfis
+    if hasattr(obj, "id_colaboradores") and obj.id_colaboradores is not None:
+        db_obj.id_colaboradores = obj.id_colaboradores
     if obj.email is not None:
         db_obj.email = obj.email
         
-    # 3. Tratamento da senha (só atualiza se uma nova senha for enviada)
-    if obj.senha_hash is not None:
-        db_obj.senha_hash = obj.senha_hash # Se você usar hash (ex: passlib), faça o hash aqui
+    # 3. Tratamento da senha
+    if hasattr(obj, "senha_hash") and obj.senha_hash is not None:
+        db_obj.senha_hash = obj.senha_hash
+    elif hasattr(obj, "senha") and obj.senha:
+        db_obj.senha_hash = obj.senha
         
-    # 4. CORREÇÃO CRÍTICA: Atualiza o booleano 'ativo' mesmo se ele for False
+    # 4. Força a conversão booleana estrita para evitar que False seja ignorado
     if obj.ativo is not None:
-        db_obj.ativo = obj.ativo
+        db_obj.ativo = bool(obj.ativo)
 
-    # 5. Grava em definitivo no banco de dados
+    # 5. Persiste as alterações no banco
     db.commit()
     db.refresh(db_obj)
     return db_obj
@@ -513,6 +555,42 @@ def deletar_permissao(id: int, db: Session = Depends(get_db)):
     db.delete(db_obj)
     db.commit()
     return {"status": "Permissão deletada com sucesso"}
+
+# ==========================================
+# ENDPOINT PARA CONSULTAR PERMISSÕES DA TELA
+# ==========================================
+# Coloque esta rota junto com os outros endpoints GET (ex: perto de /produtos/)
+@app.get("/permissoes/tela/{nome_tela}", tags=["Permissões"])
+def buscar_permissoes_por_tela(
+    nome_tela: str, 
+    x_perfil_id: int = Header(default=None, alias="x-perfil-id"), 
+    db: Session = Depends(get_db)
+):
+    permissoes_negadas = {"visualizar": False, "inserir": False, "alterar": False, "excluir": False}
+    
+    if not x_perfil_id:
+        return permissoes_negadas
+
+    # Busca a tela ignorando maiúsculas/minúsculas
+    tela = db.query(models.Tela).filter(func.lower(models.Tela.nome) == nome_tela.lower()).first()
+    if not tela:
+        return permissoes_negadas
+
+    # Busca permissão vinculada ao id_perfis e id_telas
+    permissao = db.query(models.Permissao).filter(
+        models.Permissao.id_perfis == x_perfil_id,
+        models.Permissao.id_telas == tela.id_telas
+    ).first()
+
+    if not permissao:
+        return permissoes_negadas
+
+    return {
+        "visualizar": bool(permissao.visualizar),
+        "inserir": bool(permissao.inserir),
+        "alterar": bool(permissao.alterar),
+        "excluir": bool(permissao.excluir)
+    }
 
 # ==========================================
 # 8. TELA
@@ -908,6 +986,14 @@ async def autenticar(dados: LoginSchema, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário ou senha incorretos."
+        )
+
+    # 1. Validação de usuário inativo antes de processar ou confirmar o login
+    is_ativo = getattr(user, "ativo", True)
+    if is_ativo is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado: Usuário inativo no sistema."
         )
 
     senha_hash_banco = getattr(user, "senha_hash", None) or getattr(user, "senha", None)
