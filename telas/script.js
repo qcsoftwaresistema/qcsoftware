@@ -1157,22 +1157,44 @@ async function listarMaquinasCRUD() {
             tabela.innerHTML = `<tr><td colspan="4" class="text-center py-4">Carregando máquinas...</td></tr>`;
         }
 
+        // 1. Obtém o ID do perfil ativo
         const perfilId = typeof PERFIL_USUARIO !== 'undefined' && PERFIL_USUARIO !== null 
-          ? PERFIL_USUARIO 
-          : obterIdPerfilUsuario();
+            ? PERFIL_USUARIO 
+            : (typeof obterIdPerfilUsuario === 'function' ? obterIdPerfilUsuario() : localStorage.getItem("id_perfis"));
 
-      const res = await fetch(`${API_URL}/maquinas/`, {
-          method: 'GET',
-          cache: 'no-store',
-          headers: {
-              'Content-Type': 'application/json',
-              'x-perfil-id': perfilId ? perfilId.toString() : ""
-          }
-      });
+        // 2. Garante uma URL base absoluta válida (local ou produção)
+        let baseUrl = (typeof API_URL !== 'undefined' && API_URL && API_URL.trim() !== "") 
+            ? API_URL.trim().replace(/\/+$/, '') 
+            : window.location.origin;
 
-      if (!res.ok) {
-          throw new Error(`Erro no servidor: Status ${res.status}`);
-      }
+        // Se estiver rodando pelo arquivo estático ou sem protocolo, força a API da nuvem
+        if (baseUrl.startsWith("file://") || !baseUrl.includes("http")) {
+            baseUrl = "https://sistema.qcsoftware.com.br";
+        }
+
+        const headersPadrao = {
+            'Content-Type': 'application/json',
+            'x-perfil-id': perfilId ? String(perfilId) : ""
+        };
+
+        // 3. Executa a requisição (tenta /maquinas/ e, se der 404 por proxy rewrite, tenta /maquinas)
+        let res = await fetch(`${baseUrl}/maquinas/`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: headersPadrao
+        });
+
+        if (res.status === 404) {
+            res = await fetch(`${baseUrl}/maquinas`, {
+                method: 'GET',
+                cache: 'no-store',
+                headers: headersPadrao
+            });
+        }
+
+        if (!res.ok) {
+            throw new Error(`Erro no servidor: Status ${res.status}`);
+        }
 
         todasMaquinas = await res.json();
         
