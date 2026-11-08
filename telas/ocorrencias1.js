@@ -258,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // =========================================================================
-// RENDERIZAÇÃO EM TELA DO HTML COM TRATAMENTO DE TRAÇO (-) DEFINITIVO
+// RENDERIZAÇÃO EM TELA DO HTML (COM EXIBIÇÃO DE "Não informado")
 // =========================================================================
 function renderizarTabelaOcorrencias(ocorrencias) {
     const tabela = document.getElementById('tabela-ocorrencias');
@@ -269,19 +269,12 @@ function renderizarTabelaOcorrencias(ocorrencias) {
         return;
     }
 
-    // Função para tratar valores vazios, zerados ou marcados como "não informado"
-    const formatarTextoComTraco = (valor) => {
-        if (valor === undefined || valor === null) return "-";
+    // Helper: se vier nulo, vazio ou zerado, preserva "Não informado" em vez de traço
+    const formatarNaoInformado = (valor) => {
+        if (valor === undefined || valor === null) return "Não informado";
         const str = String(valor).trim();
-        if (
-            str === "" || 
-            str === "0" || 
-            str.toLowerCase() === "não informado" || 
-            str.toLowerCase() === "nao informado" || 
-            str.toLowerCase() === "null" || 
-            str.toLowerCase() === "undefined"
-        ) {
-            return "-";
+        if (str === "" || str === "0" || str === "-" || str.toLowerCase() === "null" || str.toLowerCase() === "undefined") {
+            return "Não informado";
         }
         return str;
     };
@@ -306,7 +299,7 @@ function renderizarTabelaOcorrencias(ocorrencias) {
 
         // 3. Formatação da Data/Hora
         let dataOriginalRaw = o.data_ocorrencias ?? o.data_ocorrencia ?? o.data ?? "";
-        let dataFormatada = "-";
+        let dataFormatada = "Não informado";
         if (dataOriginalRaw && dataOriginalRaw !== "-") {
             try {
                 const dataObjeto = new Date(dataOriginalRaw.replace(' ', 'T'));
@@ -322,41 +315,41 @@ function renderizarTabelaOcorrencias(ocorrencias) {
         const fkMaquina = o.id_maquinas ?? o.id_maquina ?? 0;
         const fkColaborador = o.id_colaboradores ?? o.id_colaborador ?? 0;
 
-        // 5. Resolução de Nomes: prioriza string direta da API, caso contrário busca no array global
-        let produto = o.nome_produto || o.produto_nome || o.produto || "-";
-        if ((produto === "-" || !isNaN(produto)) && fkProduto && window.listaDeProdutos) {
+        // 5. Resolução de Nomes
+        let produto = o.nome_produto || o.produto_nome || o.produto || "";
+        if ((!produto || !isNaN(produto)) && fkProduto && window.listaDeProdutos) {
             const prodEnc = window.listaDeProdutos.find(p => 
                 String(p.id_produtos ?? p.id_Produtos ?? p.id ?? p._id) === String(fkProduto)
             );
             if (prodEnc && prodEnc.nome) produto = prodEnc.nome;
         }
-        produto = formatarTextoComTraco(produto);
+        produto = formatarNaoInformado(produto);
 
-        let maquina = o.nome_maquina || o.maquina_nome || o.maquina || "-";
-        if ((maquina === "-" || !isNaN(maquina)) && fkMaquina && window.listaDeMaquinas) {
+        let maquina = o.nome_maquina || o.maquina_nome || o.maquina || "";
+        if ((!maquina || !isNaN(maquina)) && fkMaquina && window.listaDeMaquinas) {
             const maqEnc = window.listaDeMaquinas.find(m => 
                 String(m.id_maquinas ?? m.id_Maquinas ?? m.id ?? m._id) === String(fkMaquina)
             );
             if (maqEnc && maqEnc.nome) maquina = maqEnc.nome;
         }
-        maquina = formatarTextoComTraco(maquina);
+        maquina = formatarNaoInformado(maquina);
 
-        let colaborador = o.nome_colaborador || o.colaborador_nome || o.colaborador || "-";
-        if ((colaborador === "-" || !isNaN(colaborador)) && fkColaborador && window.listaDeColaboradores) {
+        let colaborador = o.nome_colaborador || o.colaborador_nome || o.colaborador || "";
+        if ((!colaborador || !isNaN(colaborador)) && fkColaborador && window.listaDeColaboradores) {
             const colabEnc = window.listaDeColaboradores.find(c => 
                 String(c.id_colaboradores ?? c.id_Colaboradores ?? c.id ?? c._id) === String(fkColaborador)
             );
             if (colabEnc && colabEnc.nome) colaborador = colabEnc.nome;
         }
-        colaborador = formatarTextoComTraco(colaborador);
+        colaborador = formatarNaoInformado(colaborador);
 
-        // 6. Resolução de Lote e Ocorrência (Descrição/Problema)
-        const lote = formatarTextoComTraco(o.lote_produtos ?? o.lote_produto ?? o.lote);
-        const ocorrenciaDescricao = formatarTextoComTraco(
+        // 6. Lote e Ocorrência (Problema / Falha) exibindo o texto do banco
+        const lote = formatarNaoInformado(o.lote_produtos ?? o.lote_produto ?? o.lote);
+        const ocorrenciaDescricao = formatarNaoInformado(
             o.ocorrencia ?? o.problema ?? o.descricao ?? o.falha_como ?? o.motivo
         );
 
-        // 7. Tratamento de Foto
+        // 7. Foto
         const dataLimpaUrl = dataOriginalRaw ? dataOriginalRaw.toString().split('.')[0].replace(' ', 'T') : '';
         const caminhoFoto = o.foto || o.imagem || o.foto_ocorrencia || null;
         let iconeFotoHTML = `<span class="text-muted" title="Sem foto"><i class="bi bi-image-alt opacity-50"></i></span>`;
@@ -373,7 +366,7 @@ function renderizarTabelaOcorrencias(ocorrencias) {
         return `
             <tr class="align-middle">                
                 <td>${lote}</td>
-                <td><strong>${numeroOcoInt > 0 ? numeroOcoInt : "-"}</strong></td>            
+                <td><strong>${numeroOcoInt > 0 ? numeroOcoInt : "Não informado"}</strong></td>            
                 <td>${dataFormatada}</td>
                 <td>${produto}</td>
                 <td>${maquina}</td>
