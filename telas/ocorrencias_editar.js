@@ -10,6 +10,15 @@ let OcorrenciasFiltradas = [];   // Armazena os registros após aplicação dos 
 let FOTO_OCORRENCIA_BASE64 = null;
 let ocoSeguro = {};              // Objeto de backup da ocorrência em edição
 
+// --- NOVO: OBJETO DE PERMISSÕES PARA OCORRÊNCIAS EDITAR ---
+let permissoesTelaOcorrenciasEditar = { visualizar: false, inserir: false, alterar: false, excluir: false };
+
+function obterIdPerfilUsuarioLocal() {
+    if (typeof PERFIL_USUARIO !== 'undefined' && PERFIL_USUARIO) return PERFIL_USUARIO;
+    if (typeof obterIdPerfilUsuario === 'function') return obterIdPerfilUsuario();
+    return localStorage.getItem('id_perfis') || sessionStorage.getItem('id_perfis') || null;
+}
+
 // Auxiliar para obter data local formatada no Fuso de Brasília (UTC-3)
 function obterDataHoraAtualLocal() {
     const agora = new Date();
@@ -37,6 +46,35 @@ function obterDataHoraAtualLocal() {
 // INICIALIZADOR ÚNICO DE DOM (EVITA CONCORRÊNCIA E FORMATOS EM BRANCO)
 // =========================================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    // --- NOVO: BUSCA PERMISSÕES DO BANCO ---
+    const perfilId = obterIdPerfilUsuarioLocal();
+    if (perfilId) {
+        try {
+            let idTelaOcorrencias = 50;
+            const resPerms = await fetch(`${API_URL}/permissoes/`).catch(() => fetch(`${API_URL}/permissoes`));
+            if (resPerms && resPerms.ok) {
+                const listaPermissoes = await resPerms.json();
+                const listaOrdenada = Array.isArray(listaPermissoes) 
+                    ? [...listaPermissoes].sort((a, b) => (b.id_permissoes || 0) - (a.id_permissoes || 0)) 
+                    : [];
+
+                const permissaoEncontrada = listaOrdenada.find(p => 
+                    Number(p.id_perfis) === Number(perfilId) && Number(p.id_telas) === Number(idTelaOcorrencias)
+                );
+
+                if (permissaoEncontrada) {
+                    permissoesTelaOcorrenciasEditar = {
+                        visualizar: Boolean(permissaoEncontrada.visualizar),
+                        inserir: Boolean(permissaoEncontrada.inserir),
+                        alterar: Boolean(permissaoEncontrada.alterar),
+                        excluir: Boolean(permissaoEncontrada.excluir)
+                    };
+                }
+            }
+        } catch (e) {
+            console.error("Erro ao carregar permissões:", e);
+        }
+    }
     // 1. Controle da Sidebar
     const toggleBtn = document.querySelector('.sidebar-toggle-btn') || document.getElementById('toggleSidebar');
     if (toggleBtn) {
@@ -76,13 +114,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log("Dicionários e seletores carregados com sucesso.");
     } catch (e) { console.error("Erro crítico ao carregar seletores dinâmicos:", e); }
 
-    // 4. Verifica se a página está em modo Edição ou Listagem Geral
+    // --- BLOCO 4: VERIFICA MODO DE EDIÇÃO OU LISTAGEM COM TRAVA DE PERMISSÃO ---
     const paramsURL = new URLSearchParams(window.location.search);
     if (paramsURL.has('editar') || paramsURL.has('numero_ocorrencias')) {
+        if (!permissoesTelaOcorrenciasEditar.alterar) {
+            alert("Aviso de Permissão: Seu perfil não possui permissão para alterar ocorrências.");
+            const form = document.getElementById('formOcorrencias') || document.querySelector('form');
+            if (form) {
+                Array.from(form.elements).forEach(el => el.disabled = true);
+            }
+            return;
+        }
         await verificarEDirecionarEdicao();
         vincularSalvamentoOcorrencia();
     } else {
-        await listarOcorrenciasCRUD();
+        if (permissoesTelaOcorrenciasEditar.visualizar) {
+            await listarOcorrenciasCRUD();
+        } else {
+            const tabela = document.getElementById('tabela-ocorrencias');
+            if (tabela) tabela.innerHTML = `<tr><td colspan="10" class="text-center py-4 text-danger"><i class="bi bi-lock-fill"></i> Acesso Negado: Seu perfil não possui permissão para visualizar ocorrências.</td></tr>`;
+        }
     }
 
     // 5. Configura ouvintes dos filtros superiores (Se existirem na tela de listagem)
@@ -250,11 +301,18 @@ function renderizarTabelaOcorrencias(ocorrencias) {
                 <td><span class="badge ${badgeClasse}">${textoSituacao}</span></td>
                 <td>${iconeFotoHTML}</td>
                 <td style="text-align: left; white-space: nowrap;">
-                    <button type="button" class="btn btn-sm btn-outline-primary border-0" 
-                            onclick="window.location.href='ocorrencias_editar.html?editar=true&numero_ocorrencias=${numeroOcoInt}&data_ocorrencias=${encodeURIComponent(dataOriginalString)}&id_maquinas=${fkMaquina}&id_colaboradores=${fkColaborador}&id_produtos=${fkProduto}&posicao_lista=${index}'" 
-                            title="Editar">
-                        <i class="bi bi-pencil"></i>
-                    </button>
+                    ${permissoesTelaOcorrenciasEditar.alterar 
+                        ? `<button type="button" class="btn btn-sm btn-outline-primary border-0" 
+                                   onclick="window.location.href='ocorrencias_editar.html?editar=true&numero_ocorrencias=${numeroOcoInt}&data_ocorrencias=${encodeURIComponent(dataOriginalString)}&id_maquinas=${fkMaquina}&id_colaboradores=${fkColaborador}&id_produtos=${fkProduto}&posicao_lista=${index}'" 
+                                   title="Editar">
+                               <i class="bi bi-pencil"></i>
+                           </button>`
+                        : `<button type="button" class="btn btn-sm btn-outline-secondary border-0 opacity-50" 
+                                   onclick="alert('Seu perfil não possui permissão para alterar ocorrências.')" 
+                                   title="Sem permissão para alterar">
+                               <i class="bi bi-pencil"></i>
+                           </button>`
+                    }
                 </td>
             </tr>
         `;
@@ -393,6 +451,17 @@ function vincularSalvamentoOcorrencia() {
 window.executarEnvioOcorrencia = async function() {
     const paramsURL = new URLSearchParams(window.location.search);
     const estaEditando = paramsURL.has('editar') || paramsURL.has('numero_ocorrencias');
+    
+    // --- NOVO: TRAVA DE PERMISSÃO ANTES DE ENVIAR ---
+    if (estaEditando && !permissoesTelaOcorrenciasEditar.alterar) {
+        alert("Seu perfil não possui permissão para alterar ocorrências.");
+        return;
+    }
+    if (!estaEditando && !permissoesTelaOcorrenciasEditar.inserir) {
+        alert("Seu perfil não possui permissão para inserir novas ocorrências.");
+        return;
+    }
+
     const metodo = estaEditando ? 'PUT' : 'POST';
 
     try {
@@ -498,9 +567,14 @@ window.executarEnvioOcorrencia = async function() {
 
         console.log(`[${metodo}] Enviando Payload Unificado:`, payloadBody);
 
+const perfilId = obterIdPerfilUsuarioLocal();
+
         const res = await fetch(urlFinal, {
             method: metodo,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            },
             body: JSON.stringify(payloadBody)
         });
         

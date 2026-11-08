@@ -250,5 +250,82 @@ window.addEventListener('resize', initSidebarMobile);
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="ocorrencias1.js"></script>
+
+<script>
+(function() {
+    function obterPerfilInfo() {
+        let perfilId = localStorage.getItem("id_perfis") || sessionStorage.getItem("id_perfis");
+        let perfilNome = "";
+
+        const chaves = ["qc_user", "usuario"];
+        for (const chave of chaves) {
+            const raw = localStorage.getItem(chave) || sessionStorage.getItem(chave);
+            if (raw) {
+                try {
+                    const obj = JSON.parse(raw);
+                    if (obj) {
+                        perfilId = perfilId || obj.id_perfis || obj.id_perfil;
+                        perfilNome = obj.perfil || obj.nome_perfil || obj.role || "";
+                    }
+                } catch (e) {}
+            }
+        }
+        return {
+            id: Number(perfilId) || null,
+            nome: String(perfilNome).toLowerCase()
+        };
+    }
+
+    const { id, nome } = obterPerfilInfo();
+
+    // 1. Garante que os elementos visuais não fiquem apagados nem transparentes
+    document.addEventListener("DOMContentLoaded", () => {
+        const elementos = document.querySelectorAll('a, button, div.card, div[onclick], div');
+        elementos.forEach(el => {
+            if (el.style.opacity === "0.5") {
+                el.style.opacity = "1";
+            }
+            if (el.style.cursor === "not-allowed") {
+                el.style.cursor = "pointer";
+            }
+        });
+    });
+
+    // 2. Regras de bloqueio ao clicar:
+    document.addEventListener("click", function(e) {
+        const elementoAlvo = e.target.closest("button, input[type='button'], input[type='submit'], .btn, a, div.card, div[onclick]");
+        if (!elementoAlvo) return;
+
+        const texto = elementoAlvo.textContent.trim().toLowerCase();
+        const ehListagem = texto.includes("listagem");
+        const ehNfc = texto.includes("não conformidades") || texto.includes("nfc");
+
+        // Perfil 31 ou "sem permissão": bloqueia os botões e a listagem
+        const ehSemPermissao = (id === 31 || nome.includes("sem permissão"));
+        
+        // Operador (29) e Colaborador (28): bloqueia APENAS a Listagem (deixa abrir as ocorrências/NFC normalmente)
+        const ehOperadorOuColab = (id === 28 || id === 29 || nome.includes("operador") || nome.includes("colaborador"));
+
+        if (ehSemPermissao) {
+            if (ehListagem || ehNfc) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                alert("⚠️ Acesso Negado: O seu perfil não possui permissão para aceder a esta área.");
+                return false;
+            }
+        } else if (ehOperadorOuColab) {
+            // Se for Operador/Colaborador, bloqueia unicamente o clique no botão de Listagem
+            if (ehListagem) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                alert("⚠️ Acesso Negado: O seu perfil não possui permissão para aceder à Listagem.");
+                return false;
+            }
+            // O clique em "Não Conformidades (NFC's)" segue normalmente sem bloqueio
+        }
+    }, true);
+})();
+</script>
+
 </body>
 </html>

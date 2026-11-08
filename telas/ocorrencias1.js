@@ -37,8 +37,47 @@ function obterDataHoraAtualLocal() {
     };
 }
 
+// =========================================================================
+// OBTENÇÃO DO PERFIL E BLOQUEIO DE ACESSO
+// =========================================================================
+function obterIdPerfilUsuario() {
+    let perfilId = localStorage.getItem("id_perfis") || sessionStorage.getItem("id_perfis");
+    if (!perfilId || perfilId === "undefined" || perfilId === "null") {
+        const chaves = ["qc_user", "usuario"];
+        for (const chave of chaves) {
+            const raw = localStorage.getItem(chave) || sessionStorage.getItem(chave);
+            if (raw) {
+                try {
+                    const obj = JSON.parse(raw);
+                    if (obj && (obj.id_perfis || obj.id_perfil)) {
+                        perfilId = obj.id_perfis || obj.id_perfil;
+                        break;
+                    }
+                } catch (e) {}
+            }
+        }
+    }
+    return (perfilId && perfilId !== "undefined" && perfilId !== "null") ? Number(perfilId) : null;
+}
+
+const PERFIL_USUARIO = obterIdPerfilUsuario();
+// Define se o perfil tem permissão (bloqueia 28 e 29)
+const PODE_VISUALIZAR_OCORRENCIAS = !(PERFIL_USUARIO === 28 || PERFIL_USUARIO === 29);
+
 // GARANTA QUE TENHA O 'async' EXATAMENTE AQUI ANTES DOS PARÊNTESES:
 document.addEventListener('DOMContentLoaded', async () => {
+
+    // --- ADICIONE ESTE BLOCO DE VERIFICAÇÃO AQUI ---
+    if (!PODE_VISUALIZAR_OCORRENCIAS) {
+        const tabela = document.getElementById('tabela-ocorrencias') || document.querySelector('tbody');
+        if (tabela) {
+            tabela.innerHTML = `<tr><td colspan="10" class="text-center text-danger py-4 font-semibold"><i class="bi bi-lock-fill me-2"></i>Acesso Negado: Seu perfil não possui permissão para visualizar ocorrências.</td></tr>`;
+        }
+        const totalBadge = document.getElementById('totalOcorrencias') || document.getElementById('total-ocorrencias') || document.querySelector('.badge');
+        if (totalBadge) totalBadge.innerText = "0";
+        return; // Interrompe a execução para não carregar os dados da API
+    }
+    // -----------------------------------------------
     
     // 1. CONTROLE DA SIDEBAR E ROTAÇÃO DA SETA
     const toggleBtn = document.querySelector('.sidebar-toggle-btn') || document.getElementById('toggleSidebar');

@@ -838,6 +838,84 @@ function renderizarGraficoSetores(ocorrencias) {
         if(document.getElementById("dataFim")) document.getElementById("dataFim").value = "";
         atualizarDashboard(dadosGlobais);
     }
+
+    async function verificarAcessoDashboard() {
+    // 1. Resgata o ID do Perfil conectado de forma flexível
+    const perfilId = typeof PERFIL_USUARIO !== 'undefined' && PERFIL_USUARIO 
+        ? PERFIL_USUARIO 
+        : (typeof obterIdPerfilUsuario === 'function' ? obterIdPerfilUsuario() : null) 
+          || localStorage.getItem('id_perfis') 
+          || sessionStorage.getItem('id_perfis');
+
+    if (!perfilId) return true;
+
+    try {
+        const baseUrl = typeof SERVIDOR_SISTEMA !== 'undefined' ? SERVIDOR_SISTEMA : API_BASE;
+
+        // 2. Busca simultaneamente as telas e as permissões
+        const [resTelas, resPerms] = await Promise.all([
+            fetch(`${baseUrl}/telas/`).catch(() => fetch(`${baseUrl}/tela/`)),
+            fetch(`${baseUrl}/permissoes/`).catch(() => fetch(`${baseUrl}/permissoes`))
+        ]);
+
+        let idTelaDashboard = 56; // Fallback do ID
+
+        if (resTelas && resTelas.ok) {
+            const listaTelas = await resTelas.json();
+            const telaEncontrada = listaTelas.find(t => t.nome && t.nome.toLowerCase().includes("dashboard"));
+            if (telaEncontrada && (telaEncontrada.id_telas || telaEncontrada.id)) {
+                idTelaDashboard = Number(telaEncontrada.id_telas || telaEncontrada.id);
+            }
+        }
+
+        if (resPerms && resPerms.ok) {
+            const listaPermissoes = await resPerms.json();
+
+            // Pega a alteração mais recente no banco
+            const listaOrdenada = Array.isArray(listaPermissoes)
+                ? [...listaPermissoes].sort((a, b) => (b.id_permissoes || 0) - (a.id_permissoes || 0))
+                : [];
+
+            const permissaoEncontrada = listaOrdenada.find(p => 
+                Number(p.id_perfis) === Number(perfilId) && Number(p.id_telas || p.id_tela) === Number(idTelaDashboard)
+            );
+
+            const podeVisualizar = permissaoEncontrada ? Boolean(permissaoEncontrada.visualizar) : false;
+
+            if (!podeVisualizar) {
+                alert("Acesso Negado: Seu perfil não possui permissão para visualizar o Dashboard.");
+
+                // Renderiza a tela de bloqueio estilizada no próprio body
+                document.body.innerHTML = `
+                    <div class="min-h-screen flex items-center justify-center p-4 bg-[#0a051b]">
+                        <div class="card-bg p-8 rounded-2xl max-w-lg w-full text-center border border-red-500/30 shadow-2xl">
+                            <div class="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+                                <i class="fa-solid fa-shield-halved text-3xl"></i>
+                            </div>
+                            <h2 class="text-2xl font-bold text-white mb-2">Acesso Restrito</h2>
+                            <p class="text-gray-400 text-sm mb-6">Seu perfil não possui permissão para acessar a tela de Dashboard.</p>
+                        </div>
+                    </div>
+                `;
+                return false;
+            }
+        }
+    } catch (e) {
+        console.error("Erro ao validar acesso ao Dashboard:", e);
+    }
+    return true;
+}
+
+// 3. Executa a verificação assim que a DOM estiver pronta
+document.addEventListener('DOMContentLoaded', async () => {
+    const permitido = await verificarAcessoDashboard();
+    if (!permitido) return; // Cancela o carregamento dos gráficos se o acesso for negado
+
+    // Executa as funções padrão da página se tiver permissão
+    if (typeof carregarCatalogosAuxiliares === 'function') await carregarCatalogosAuxiliares();
+    if (typeof buscarDadosAPI === 'function') buscarDadosAPI();
+    if (typeof buscarEAtualizarDashboard === 'function') buscarEAtualizarDashboard();
+});
 </script>
 </body>
 </html>

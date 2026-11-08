@@ -76,12 +76,43 @@
             </div>
 
             <div style="color: #ffffff; font-size: 0.8rem; margin-bottom: 6px; line-height: 1;">
-                Data: <span id="data-brasilia">--/--/----</span>
-            </div>
+    Data: <span id="data-brasilia">--/--/----</span>
+</div>
 
-            <div style="color: #ffffff; font-size: 0.8rem; margin-bottom: 8px; line-height: 1;">
-                Hora: <span id="hora-brasilia">--:--</span>
-            </div>
+<div style="color: #ffffff; font-size: 0.8rem; margin-bottom: 8px; line-height: 1;">
+    Hora: <span id="hora-brasilia">--:--</span>
+</div>
+
+<script>
+(function() {
+    function atualizarDataHora() {
+        const agora = new Date();
+        const elData = document.getElementById('data-brasilia');
+        const elHora = document.getElementById('hora-brasilia');
+
+        if (elData) {
+            elData.textContent = agora.toLocaleDateString('pt-BR', {
+                timeZone: 'America/Sao_Paulo',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        }
+
+        if (elHora) {
+            elHora.textContent = agora.toLocaleTimeString('pt-BR', {
+                timeZone: 'America/Sao_Paulo',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+        }
+    }
+
+    atualizarDataHora();
+    setInterval(atualizarDataHora, 1000);
+})();
+</script>
 
             <div class="fw-bold border-top pt-2" style="color: rgba(255, 255, 255, 0.7); font-size: 0.7rem; line-height: 1.1; border-color: rgba(255, 255, 255, 0.15) !important;">
                 © Q.C Software - versão 1.0
@@ -103,9 +134,10 @@
                     <div class="col-12">
                         <div class="card shadow-sm p-4 border-0 bg-body">
 
-                            <div class="d-block w-100 text-end mt-2">
+                           <div class="d-block w-100 text-end mt-2">
                                 <button type="submit"
                                         form="formOcorrencias"
+                                        formnovalidate
                                         class="btn btn-success btn-sm py-1 px-3 fw-bold d-inline-flex align-items-center"
                                         style="font-size: 0.95rem;">
                                     <i class="bi bi-floppy me-2"></i> Salvar
@@ -212,27 +244,27 @@
         
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold text-body">Problema</label>
-                                    <textarea id="ocorrencias-problema" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite a descrição do problema..."></textarea>
+                                    <textarea id="ocorrencias-problema" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" placeholder="Digite a descrição do problema..."></textarea>
                                 </div>
 
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold text-body">Onde ocorreu a falha?</label>
-                                    <textarea id="ocorrencias-falha-onde" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite onde ocorreu a falha..."></textarea>
+                                    <textarea id="ocorrencias-falha-onde" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" placeholder="Digite onde ocorreu a falha..."></textarea>
                                 </div>
         
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold text-body">Como ocorreu a falha?</label>
-                                    <textarea id="ocorrencias-falha-como" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite como ocorreu a falha..."></textarea>
+                                    <textarea id="ocorrencias-falha-como" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" placeholder="Digite como ocorreu a falha..."></textarea>
                                 </div>
         
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold text-body">Quando ocorreu a falha?</label>
-                                    <textarea id="ocorrencias-falha-quando" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite quando ocorreu a falha..."></textarea>
+                                    <textarea id="ocorrencias-falha-quando" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" placeholder="Digite quando ocorreu a falha..."></textarea>
                                 </div>
         
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold text-body">Quem estava envolvido na falha?</label>
-                                    <textarea id="ocorrencias-falha-quem" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite quem estava envolvido na falha..."></textarea>
+                                    <textarea id="ocorrencias-falha-quem" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" placeholder="Digite quem estava envolvido na falha..."></textarea>
                                 </div>
         
                                 <div class="col-12 mt-4">
@@ -243,12 +275,12 @@
         
                                 <div class="col-md-4">
                                     <label class="form-label fw-semibold text-body">Observações</label>
-                                    <textarea id="ocorrencias-observacoes" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Observações adicionais..."></textarea>
+                                    <textarea id="ocorrencias-observacoes" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" placeholder="Observações adicionais..."></textarea>
                                 </div>
         
                                 <div class="col-md-4">
                                     <label class="form-label fw-semibold text-body">Ações Corretivas</label>
-                                    <textarea id="ocorrencias-acao-corretiva" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" required placeholder="Digite as ações corretivas..."></textarea>
+                                    <textarea id="ocorrencias-acao-corretiva" class="form-control bg-body text-body shadow-none" style="height: 80px; resize: vertical;" placeholder="Digite as ações corretivas..."></textarea>
                                 </div>
         
                                 <div class="col-md-4">

@@ -12,6 +12,103 @@ let paginaAtualOcorrencias = 1;
 let listaDeOcorrencias = [];     
 let listaDeCargos = [];          
 
+
+// --- NOVO: OBJETO DE PERMISSÕES DA TELA OCORRÊNCIAS ---
+let permissoesTelaOcorrencias = { visualizar: false, inserir: false, alterar: false, excluir: false };
+
+// Helper para capturar o ID do Perfil logado
+function obterIdPerfilUsuarioLocal() {
+    if (typeof PERFIL_USUARIO !== 'undefined' && PERFIL_USUARIO) return PERFIL_USUARIO;
+    if (typeof obterIdPerfilUsuario === 'function') return obterIdPerfilUsuario();
+    return localStorage.getItem('id_perfis') || sessionStorage.getItem('id_perfis') || null;
+}
+
+// --- NOVO: INICIALIZADOR DINÂMICO DE PERMISSÕES ---
+async function inicializarTelaOcorrencias() {
+    const perfilId = obterIdPerfilUsuarioLocal();
+
+    if (perfilId) {
+        try {
+            let idTelaOcorrencias = 50; // ID padrão da tela de Ocorrências no banco
+
+            try {
+                const resTelas = await fetch(`${API_URL}/telas/`).catch(() => fetch(`${API_URL}/tela/`));
+                if (resTelas && resTelas.ok) {
+                    const listaTelas = await resTelas.json();
+                    const telaEncontrada = listaTelas.find(t => t.nome && t.nome.toLowerCase().includes("ocorrenc"));
+                    if (telaEncontrada && telaEncontrada.id_telas) {
+                        idTelaOcorrencias = Number(telaEncontrada.id_telas);
+                    }
+                }
+            } catch (eTelas) {
+                console.warn("Usando id_telas padrão (50) para Ocorrências.");
+            }
+
+            const resPerms = await fetch(`${API_URL}/permissoes/`).catch(() => fetch(`${API_URL}/permissoes`));
+            
+            if (resPerms && resPerms.ok) {
+                const listaPermissoes = await resPerms.json();
+
+                const listaOrdenada = Array.isArray(listaPermissoes) 
+                    ? [...listaPermissoes].sort((a, b) => (b.id_permissoes || 0) - (a.id_permissoes || 0)) 
+                    : [];
+
+                const permissaoEncontrada = listaOrdenada.find(p => 
+                    Number(p.id_perfis) === Number(perfilId) && Number(p.id_telas) === Number(idTelaOcorrencias)
+                );
+
+                if (permissaoEncontrada) {
+                    permissoesTelaOcorrencias = {
+                        visualizar: Boolean(permissaoEncontrada.visualizar),
+                        inserir: Boolean(permissaoEncontrada.inserir),
+                        alterar: Boolean(permissaoEncontrada.alterar),
+                        excluir: Boolean(permissaoEncontrada.excluir)
+                    };
+                } else {
+                    permissoesTelaOcorrencias = { visualizar: false, inserir: false, alterar: false, excluir: false };
+                }
+            }
+        } catch (e) {
+            console.error("Erro ao carregar permissões de Ocorrências:", e);
+        }
+    }
+
+    aplicarPermissoesVisuaisOcorrencias();
+
+    if (permissoesTelaOcorrencias.visualizar) {
+        listarOcorrenciasCRUD();
+    } else {
+        const tabela = document.getElementById('tabela-ocorrencias') || document.querySelector('tbody');
+        if (tabela) {
+            tabela.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4 font-semibold"><i class="bi bi-lock-fill me-2"></i>Acesso Negado: Seu perfil não possui permissão para visualizar ocorrências.</td></tr>`;
+        }
+    }
+}
+
+function aplicarPermissoesVisuaisOcorrencias() {
+    const formOcorrencias = document.getElementById('formOcorrencias');
+    const btnSalvar = formOcorrencias ? formOcorrencias.querySelector('button[type="submit"]') : null;
+    
+    if (!permissoesTelaOcorrencias.visualizar || (!permissoesTelaOcorrencias.inserir && !permissoesTelaOcorrencias.alterar)) {
+        if (formOcorrencias) {
+            Array.from(formOcorrencias.elements).forEach(element => {
+                if (element.tagName !== 'BUTTON') {
+                    element.disabled = true;
+                }
+            });
+        }
+    }
+
+    if (btnSalvar) {
+        if (!permissoesTelaOcorrencias.inserir && !permissoesTelaOcorrencias.alterar) {
+            btnSalvar.disabled = true;
+            btnSalvar.innerText = "Sem permissão para salvar";
+            btnSalvar.classList.replace('btn-primary', 'btn-secondary');
+        } else {
+            btnSalvar.disabled = false;
+        }
+    }
+}
 // Variável global para reter a foto em memória de forma segura
 let FOTO_OCORRENCIA_BASE64 = null;
 
@@ -39,14 +136,14 @@ function obterDataHoraAtualLocal() {
 }
 
 // =========================================================================
-// 1. CARREGAR OPÇÕES DO SELECT DE MÁQUINAS (DINÂMICO)
+// 1. CARREGAR OPÇÕES DO DATALIST DE MÁQUINAS
 // =========================================================================
 async function carregarMaquinasNoSelect() {
     const inputBusca = document.getElementById('maquinas-nome-busca');
-    const datalistMaquinas = document.getElementById('lista-maquinas-datalist');
-    const inputIdOculto = document.getElementById('maquinas-nome') || document.querySelector('input[id*="maquinas"]:not([id*="situacao"])');
+    const datalist = document.getElementById('lista-maquinas-datalist');
+    const inputHidden = document.getElementById('maquinas-nome');
 
-    if (!inputBusca || !datalistMaquinas || !inputIdOculto) return;
+    if (!inputBusca || !datalist || !inputHidden) return;
 
     try {
         const res = await fetch(`${API_URL}/maquinas/`, { cache: 'no-store' });
@@ -54,39 +151,36 @@ async function carregarMaquinasNoSelect() {
             const maquinas = await res.json();
             window.listaDeMaquinas = maquinas;
             maquinas.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
-            inputBusca.setAttribute('list', 'lista-maquinas-datalist');
 
-            datalistMaquinas.innerHTML = maquinas.map(m => {
-                const id_Maquinas = m.id_maquinas || m.id;
-                return `<option value="${m.nome}" data-id="${id_Maquinas}"></option>`;
-            }).join('');
+            datalist.innerHTML = maquinas.map(m => 
+                `<option value="${m.nome}" data-id="${m.id_maquinas}"></option>`
+            ).join('');
 
             window.atualizarInputVisualMaquina = function(idAlvo) {
-                if (!idAlvo) { inputBusca.value = ""; inputIdOculto.value = ""; return; }
-                const opcao = Array.from(datalistMaquinas.options).find(opt => opt.getAttribute('data-id')?.toString() === idAlvo?.toString());
-                if (opcao) { inputBusca.value = opcao.value; inputIdOculto.value = idAlvo; }
+                if (!idAlvo) { inputBusca.value = ""; inputHidden.value = ""; return; }
+                const opt = Array.from(datalist.options).find(o => o.getAttribute('data-id')?.toString() === idAlvo?.toString());
+                if (opt) { inputBusca.value = opt.value; inputHidden.value = idAlvo; }
             };
 
             inputBusca.addEventListener('input', function() {
-                const valorDigitado = this.value.trim();
-                const opcaoSelecionada = Array.from(datalistMaquinas.options).find(opt => opt.value.trim() === valorDigitado);
-                if (opcaoSelecionada) inputIdOculto.value = opcaoSelecionada.getAttribute('data-id');
-                else if (valorDigitado === "") inputIdOculto.value = "";
+                const opt = Array.from(datalist.options).find(o => o.value.trim() === this.value.trim());
+                inputHidden.value = opt ? opt.getAttribute('data-id') : "";
             });
         }
-    } catch (e) { console.error("Erro ao carregar máquinas:", e); }
+    } catch (e) { 
+        console.error("Erro ao carregar máquinas:", e); 
+    }
 }
-document.addEventListener('DOMContentLoaded', carregarMaquinasNoSelect);
 
 // =========================================================================
-// 1.1 CARREGAR OPÇÕES DO SELECT DE COLABORADORES (DINÂMICO)
+// 1.1 CARREGAR OPÇÕES DO DATALIST DE COLABORADORES
 // =========================================================================
 async function carregarColaboradoresNoSelect() {
     const inputBusca = document.getElementById('colaboradores-nome-busca');
-    const datalistColaboradores = document.getElementById('lista-colaboradores-datalist');
-    const inputIdOculto = document.getElementById('colaboradores-nome') || document.querySelector('input[id*="colaboradores"]:not([id*="situacao"])');
+    const datalist = document.getElementById('lista-colaboradores-datalist');
+    const inputHidden = document.getElementById('colaboradores-nome');
 
-    if (!inputBusca || !datalistColaboradores || !inputIdOculto) return;
+    if (!inputBusca || !datalist || !inputHidden) return;
 
     try {
         const res = await fetch(`${API_URL}/colaboradores/`, { cache: 'no-store' });
@@ -94,39 +188,36 @@ async function carregarColaboradoresNoSelect() {
             const colaboradores = await res.json();
             window.listaDeColaboradores = colaboradores;
             colaboradores.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
-            inputBusca.setAttribute('list', 'lista-colaboradores-datalist');
 
-            datalistColaboradores.innerHTML = colaboradores.map(c => {
-                const id_Colaboradores = c.id_colaboradores || c.id_Colaboradores || c.id;
-                return `<option value="${c.nome}" data-id="${id_Colaboradores}"></option>`;
-            }).join('');
+            datalist.innerHTML = colaboradores.map(c => 
+                `<option value="${c.nome}" data-id="${c.id_colaboradores}"></option>`
+            ).join('');
 
             window.atualizarInputVisualColaboradores = function(idAlvo) {
-                if (!idAlvo) { inputBusca.value = ""; inputIdOculto.value = ""; return; }
-                const opcao = Array.from(datalistColaboradores.options).find(opt => opt.getAttribute('data-id')?.toString() === idAlvo?.toString());
-                if (opcao) { inputBusca.value = opcao.value; inputIdOculto.value = idAlvo; }
+                if (!idAlvo) { inputBusca.value = ""; inputHidden.value = ""; return; }
+                const opt = Array.from(datalist.options).find(o => o.getAttribute('data-id')?.toString() === idAlvo?.toString());
+                if (opt) { inputBusca.value = opt.value; inputHidden.value = idAlvo; }
             };
 
             inputBusca.addEventListener('input', function() {
-                const valorDigitado = this.value.trim();
-                const opcaoSelecionada = Array.from(datalistColaboradores.options).find(opt => opt.value.trim() === valorDigitado);
-                if (opcaoSelecionada) inputIdOculto.value = opcaoSelecionada.getAttribute('data-id');
-                else if (valorDigitado === "") inputIdOculto.value = "";
+                const opt = Array.from(datalist.options).find(o => o.value.trim() === this.value.trim());
+                inputHidden.value = opt ? opt.getAttribute('data-id') : "";
             });
         }
-    } catch (e) { console.error("Erro ao carregar colaboradores:", e); }
+    } catch (e) { 
+        console.error("Erro ao carregar colaboradores:", e); 
+    }
 }
-document.addEventListener('DOMContentLoaded', carregarColaboradoresNoSelect);
 
 // =========================================================================
-// 1.1.1 CARREGAR OPÇÕES DO SELECT DE PRODUTOS (DINÂMICO)
+// 1.2 CARREGAR OPÇÕES DO DATALIST DE PRODUTOS
 // =========================================================================
 async function carregarProdutosNoSelect() {
     const inputBusca = document.getElementById('produtos-nome-busca');
-    const datalistProdutos = document.getElementById('lista-produtos-datalist');
-    const inputIdOculto = document.getElementById('produtos-nome') || document.querySelector('input[id*="produtos"]:not([id*="situacao"])');
+    const datalist = document.getElementById('lista-produtos-datalist');
+    const inputHidden = document.getElementById('produtos-nome');
 
-    if (!inputBusca || !datalistProdutos || !inputIdOculto) return;
+    if (!inputBusca || !datalist || !inputHidden) return;
 
     try {
         const res = await fetch(`${API_URL}/produtos/`, { cache: 'no-store' });
@@ -134,29 +225,118 @@ async function carregarProdutosNoSelect() {
             const produtos = await res.json();
             window.listaDeProdutos = produtos;
             produtos.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
-            inputBusca.setAttribute('list', 'lista-produtos-datalist');
 
-            datalistProdutos.innerHTML = produtos.map(p => {
-                const id_Produtos = p.id_produtos || p.id_Produtos || p.id;
-                return `<option value="${p.nome}" data-id="${id_Produtos}"></option>`;
-            }).join('');
+            datalist.innerHTML = produtos.map(p => 
+                `<option value="${p.nome}" data-id="${p.id_produtos}"></option>`
+            ).join('');
 
             window.atualizarInputVisualProdutos = function(idAlvo) {
-                if (!idAlvo) { inputBusca.value = ""; inputIdOculto.value = ""; return; }
-                const opcao = Array.from(datalistProdutos.options).find(opt => opt.getAttribute('data-id')?.toString() === idAlvo?.toString());
-                if (opcao) { inputBusca.value = opcao.value; inputIdOculto.value = idAlvo; }
+                if (!idAlvo) { inputBusca.value = ""; inputHidden.value = ""; return; }
+                const opt = Array.from(datalist.options).find(o => o.getAttribute('data-id')?.toString() === idAlvo?.toString());
+                if (opt) { inputBusca.value = opt.value; inputHidden.value = idAlvo; }
             };
 
             inputBusca.addEventListener('input', function() {
-                const valorDigitado = this.value.trim();
-                const opcaoSelecionada = Array.from(datalistProdutos.options).find(opt => opt.value.trim() === valorDigitado);
-                if (opcaoSelecionada) inputIdOculto.value = opcaoSelecionada.getAttribute('data-id');
-                else if (valorDigitado === "") inputIdOculto.value = "";
+                const opt = Array.from(datalist.options).find(o => o.value.trim() === this.value.trim());
+                inputHidden.value = opt ? opt.getAttribute('data-id') : "";
             });
         }
-    } catch (e) { console.error("Erro ao carregar produtos:", e); }
+    } catch (e) { 
+        console.error("Erro ao carregar produtos:", e); 
+    }
 }
-document.addEventListener('DOMContentLoaded', carregarProdutosNoSelect);
+
+// =========================================================================
+// REMOÇÃO DEFINITIVA DE OBRIGATORIEDADE DOS CAMPOS OPCIONAIS NO FRONTEND
+// =========================================================================
+function desativarValidacoesCamposOpcionais() {
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        form.noValidate = true;
+        form.setAttribute('novalidate', 'novalidate');
+    });
+
+    // Termos que identificam os campos opcionais (por id, name, placeholder ou label correspondente)
+    const termosOpcionais = [
+        'onde', 'como', 'quando', 'quem', 
+        'observa', 'corretiv', 'lote', 'nota'
+    ];
+
+    const campos = document.querySelectorAll('input, textarea, select');
+    
+    campos.forEach(campo => {
+        const idLower = (campo.id || '').toLowerCase();
+        const nameLower = (campo.name || '').toLowerCase();
+        const placeholderLower = (campo.placeholder || '').toLowerCase();
+        
+        // Verifica também o texto da label associada ao campo
+        let labelTexto = '';
+        if (campo.id) {
+            const label = document.querySelector(`label[for="${campo.id}"]`);
+            if (label) labelTexto = label.innerText.toLowerCase();
+        }
+        if (!labelTexto) {
+            const labelPai = campo.closest('label') || campo.closest('.form-group, .mb-3, div');
+            if (labelPai) labelTexto = labelPai.innerText.toLowerCase();
+        }
+
+        const textoIdentificador = `${idLower} ${nameLower} ${placeholderLower} ${labelTexto}`;
+        const ehCampoOpcional = termosOpcionais.some(termo => textoIdentificador.includes(termo));
+
+        if (ehCampoOpcional) {
+            campo.required = false;
+            campo.removeAttribute('required');
+            campo.removeAttribute('aria-required');
+            campo.setCustomValidity('');
+
+            // Força a validação nativa a sempre retornar positivo
+            campo.checkValidity = () => true;
+            campo.reportValidity = () => true;
+        }
+    });
+}
+
+// 1. Intercepta globalmente qualquer evento 'invalid' antes do balão ser disparado na tela
+window.addEventListener('invalid', (e) => {
+    const el = e.target;
+    const identificador = `${el.id || ''} ${el.name || ''} ${el.placeholder || ''}`.toLowerCase();
+    
+    // Lista de campos que não devem travar
+    const termos = ['onde', 'como', 'quando', 'quem', 'observa', 'corretiv', 'lote', 'nota'];
+    if (termos.some(t => identificador.includes(t))) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        el.removeAttribute('required');
+        el.required = false;
+        el.setCustomValidity('');
+    }
+}, true);
+
+// 2. Intercepta o clique no botão Salvar antes da validação nativa do formulário acontecer
+document.addEventListener('click', (e) => {
+    const botao = e.target.closest('button, input[type="submit"]');
+    if (botao) {
+        desativarValidacoesCamposOpcionais();
+    }
+}, true);
+
+// 3. Execução no carregamento da tela e monitoramento contínuo
+document.addEventListener('DOMContentLoaded', async () => {
+    desativarValidacoesCamposOpcionais();
+
+    // Observador contínuo: anula caso algum script reponha o atributo 'required'
+    const observer = new MutationObserver(() => {
+        desativarValidacoesCamposOpcionais();
+    });
+    observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['required'] });
+
+    await carregarMaquinasNoSelect();
+    await carregarColaboradoresNoSelect();
+    await carregarProdutosNoSelect();
+    await inicializarTelaOcorrencias();
+
+    desativarValidacoesCamposOpcionais();
+});
 
 // =========================================================================
 // 2. LISTAR OCORRENCIAS (READ com Filtro e Paginação)
@@ -287,10 +467,21 @@ function atualizarControlesPaginacaoOcorrencias(totalPaginas) {
 // 3. SALVAR OU ATUALIZAR CADASTRO (CREATE / UPDATE)
 // =========================================================================
 document.getElementById('formOcorrencias')?.addEventListener('submit', async (e) => {
-    e.preventDefault(); // Impede o recarregamento instantâneo da página
+    e.preventDefault();
     
     const campoId = document.getElementById('ocorrencias-id');
     const id = campoId ? campoId.value.trim() : "";
+
+    // Validações de permissão protegidas dentro do submit:
+    if (!id && !permissoesTelaOcorrencias.inserir) {
+        alert("Seu perfil não possui permissão para inserir novas ocorrências.");
+        return;
+    }
+    if (id && !permissoesTelaOcorrencias.alterar) {
+        alert("Seu perfil não possui permissão para alterar ocorrências.");
+        return;
+    }
+
     const url = id ? `${API_URL}/ocorrencias/${id}` : `${API_URL}/ocorrencias/`;
     const metodo = id ? 'PUT' : 'POST';
 
@@ -331,88 +522,181 @@ document.getElementById('formOcorrencias')?.addEventListener('submit', async (e)
             id_maquinas: idMaquinasInt,
             id_colaboradores: idColaboradoresInt,
             id_produtos: idProdutosInt,
-            lote_produtos: document.getElementById('ocorrencias-lote-produto')?.value || "0",
+
+            // Salva como "Não informado" no banco de dados quando vazio
+            lote_produtos: document.getElementById('ocorrencias-lote-produto')?.value?.trim() || "Não informado",
             numero_nota: parseInt(document.getElementById('ocorrencias-numero-nota-fiscal')?.value, 10) || 0,
-            problema: document.getElementById('ocorrencias-problema')?.value || "",
-            falha_onde: document.getElementById('ocorrencias-falha-onde')?.value || "Não informado",
-            falha_como: document.getElementById('ocorrencias-falha-como')?.value || "",
-            falha_quando: document.getElementById('ocorrencias-falha-quando')?.value || "",
-            falha_quem: document.getElementById('ocorrencias-falha-quem')?.value || "",
-            observacoes: document.getElementById('ocorrencias-observacoes')?.value || "",
-            acao_corretiva: document.getElementById('ocorrencias-acao-corretiva')?.value || "",
+
+            problema: document.getElementById('ocorrencias-problema')?.value?.trim() || "Não informado",
+
+            // Campos salvos como "Não informado" no banco de dados se não preenchidos
+            falha_onde: document.getElementById('ocorrencias-falha-onde')?.value?.trim() || "Não informado",
+            falha_como: document.getElementById('ocorrencias-falha-como')?.value?.trim() || "Não informado",
+            falha_quando: document.getElementById('ocorrencias-falha-quando')?.value?.trim() || "Não informado",
+            falha_quem: document.getElementById('ocorrencias-falha-quem')?.value?.trim() || "Não informado",
+            observacoes: document.getElementById('ocorrencias-observacoes')?.value?.trim() || "Não informado",
+            acao_corretiva: document.getElementById('ocorrencias-acao-corretiva')?.value?.trim() || "Não informado",
+
             data_prazo: dataPrazoTratada, 
             situacao: situacaoTexto, 
-            foto: FOTO_OCORRENCIA_BASE64 // Usa o Base64 persistido de forma limpa da memória global
+            foto: FOTO_OCORRENCIA_BASE64
         };
+
+        // --- ATUALIZAR O FETCH NO SUBMIT PARA PASSAR O HEADER DE PERFIL ---
+        const perfilId = obterIdPerfilUsuarioLocal();
 
         const res = await fetch(url, {
             method: metodo,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            },
             body: JSON.stringify(payloadJSON)
         });
         
-        if (res.ok) { 
-            dispararNotificacao(id ? "Ocorrência alterada com sucesso!" : "Nova ocorrência cadastrada com sucesso!", id ? "atualizar" : "criar");
+            // =========================================================================
+// FLUXO DE RESPOSTA DO SALVAMENTO (SUBMIT)
+// =========================================================================
+if (res.ok) { 
+    // Notificação visual de retorno
+    dispararNotificacao(
+        id ? "Ocorrência alterada com sucesso!" : "Nova ocorrência cadastrada com sucesso!", 
+        id ? "atualizar" : "criar"
+    );
 
-            // 1. PRIMEIRO: Copia os dados do formulário para o layout de impressão A4[cite: 2, 3]
-            if (typeof prepararDadosImpressao === "function") {
-                prepararDadosImpressao();
-            }
-
-            // 2. SEGUNDO: Exibe o modal/toast para confirmação de impressão[cite: 2]
-            if (typeof exibirToastImpressao === "function") {
-                exibirToastImpressao();
-            }
-
-            // 3. TERCEIRO: Reseta os campos do formulário
-            document.getElementById('formOcorrencias').reset();
-            
-            const inputDataOcorrencia = document.getElementById('ocorrencias-data');
-            if (inputDataOcorrencia) inputDataOcorrencia.value = obterDataHoraAtualLocal();
-
-            if (campoId) campoId.value = ""; 
-            
-            const elMaquina = document.getElementById('maquinas-nome');
-            if (elMaquina) elMaquina.value = "";
-            
-            const elProduto = document.getElementById('produtos-nome');
-            if (elProduto) elProduto.value = "";
-            
-            const elColaborador = document.getElementById('colaboradores-nome');
-            if (elColaborador) elColaborador.value = "";
-            
-            const elMaquinaBusca = document.getElementById('maquinas-nome-busca');
-            if (elMaquinaBusca) elMaquinaBusca.value = "";
-            
-            const elColabBusca = document.getElementById('colaboradores-nome-busca');
-            if (elColabBusca) elColabBusca.value = "";
-            
-            const elProdBusca = document.getElementById('produtos-nome-busca');
-            if (elProdBusca) elProdBusca.value = "";
-
-            if (typeof resetarVisualFoto === "function") resetarVisualFoto();
-
-            const tituloForm = document.getElementById('titulo-form-colab');
-            if (tituloForm) tituloForm.innerHTML = '<i class="sidebar-texto fa-solid fa-triangle-exclamation me-3"></i> Nova Ocorrência';
-
-            if (typeof listarOcorrenciasCRUD === "function") listarOcorrenciasCRUD();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-            alert("Erro ao salvar ocorrência no servidor.");
+    // 1. PRIMEIRO: Transfere os dados atuais para o layout de impressão A4 antes de zerar o form
+    try {
+        if (typeof prepararDadosImpressao === "function") {
+            prepararDadosImpressao();
         }
-    } catch (err) {
-        console.error("Erro no processo de salvamento:", err);
+    } catch (errImpressao) {
+        console.warn("Aviso ao preparar dados de impressão:", errImpressao);
+    }
+
+    // 2. SEGUNDO: Exibe o modal/toast com a opção de imprimir a ocorrência salva
+    if (typeof exibirToastImpressao === "function") {
+        exibirToastImpressao();
+    }
+
+    // 3. TERCEIRO: Limpa completamente a tela para a próxima ocorrência
+    try {
+        limparTelaParaNovaOcorrencia();
+    } catch (errLimpeza) {
+        console.error("Erro na limpeza dos campos:", errLimpeza);
+    }
+
+    // 4. Atualiza a tabela com a listagem de registros e rola para o topo
+    if (typeof listarOcorrenciasCRUD === "function") {
+        listarOcorrenciasCRUD();
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+} else {
+    alert("Erro ao salvar ocorrência no servidor.");
+}
+    } catch (e) {
+        console.error("Erro ao salvar ocorrência:", e);
+        alert("Erro ao salvar ocorrência no servidor.");
     }
 });
+
+// =========================================================================
+// FUNÇÕES AUXILIARES DE LIMPEZA E FORMATAÇÃO
+// =========================================================================
+
+/**
+ * Atribui texto de maneira segura a um elemento existente no DOM
+ */
+function setTxt(idElemento, valor) {
+    const el = document.getElementById(idElemento);
+    if (el) {
+        const textoValido = (valor !== undefined && valor !== null && String(valor).trim() !== '') ? valor : "---";
+        el.innerText = textoValido;
+    }
+}
+
+/**
+ * Recupera valor tanto de <input> quanto o texto selecionado de <select>
+ */
+function obterValorElemento(idElemento) {
+    const el = document.getElementById(idElemento);
+    if (!el) return "";
+    if (el.tagName === 'SELECT' && el.selectedIndex >= 0) {
+        return el.options[el.selectedIndex].text.trim();
+    }
+    return el.value ? el.value.trim() : "";
+}
+
+function limparTelaParaNovaOcorrencia() {
+    const form = document.getElementById('formOcorrencias');
+    if (form) form.reset();
+
+    const camposParaLimpar = [
+        'ocorrencias-id',
+        'ocorrencias-numero',
+        'ocorrencias-problema',
+        'ocorrencias-lote-produto',
+        'ocorrencias-numero-nota-fiscal',
+        'ocorrencias-falha-onde',
+        'ocorrencias-falha-como',
+        'ocorrencias-falha-quando',
+        'ocorrencias-falha-quem',
+        'ocorrencias-observacoes',
+        'ocorrencias-acao-corretiva',
+        'ocorrencias-data-prazo',
+        'maquinas-nome',
+        'produtos-nome',
+        'colaboradores-nome',
+        'maquinas-nome-busca',
+        'colaboradores-nome-busca',
+        'produtos-nome-busca'
+    ];
+
+    camposParaLimpar.forEach(idCampo => {
+        const el = document.getElementById(idCampo);
+        if (el) {
+            el.value = "";
+            if (el.tagName === 'SELECT') el.selectedIndex = 0;
+        }
+    });
+
+    // Redefine a data/hora local atual
+    const inputDataOcorrencia = document.getElementById('ocorrencias-data');
+    if (inputDataOcorrencia) {
+        inputDataOcorrencia.value = typeof obterDataHoraAtualLocal === "function" 
+            ? obterDataHoraAtualLocal() 
+            : new Date().toISOString().slice(0, 16);
+    }
+
+    // Retorna a situação ao status padrão
+    const selectSituacao = document.getElementById('ocorrencias-situacao');
+    if (selectSituacao) selectSituacao.value = "Pendente";
+
+    // Reseta foto e preview
+    if (typeof FOTO_OCORRENCIA_BASE64 !== "undefined") {
+        FOTO_OCORRENCIA_BASE64 = null;
+    }
+    if (typeof resetarVisualFoto === "function") {
+        resetarVisualFoto();
+    }
+
+    // Restaura o cabeçalho do formulário
+    const tituloForm = document.getElementById('titulo-form-colab');
+    if (tituloForm) {
+        tituloForm.innerHTML = '<i class="sidebar-texto fa-solid fa-triangle-exclamation me-3"></i> Nova Ocorrência';
+    }
+}
 
 function dispararNotificacao(mensagem, acao = 'sucesso') {
     const elementoToast = document.getElementById('toast-cadastro');
     const textoToast = document.getElementById('toast-mensagem-texto');
     if (!elementoToast || !textoToast) return;
+
     elementoToast.className = "toast align-items-center text-white bg-success border-0 shadow";
     textoToast.innerText = mensagem;
+
     if (typeof bootstrap !== "undefined" && bootstrap.Toast) {
-        const bootstrapToast = new bootstrap.Toast(elementoToast, { delay: 3500 });
+        const bootstrapToast = bootstrap.Toast.getOrCreateInstance(elementoToast, { delay: 3500 });
         bootstrapToast.show();
     }
 }
@@ -435,55 +719,91 @@ function fecharToastImpressao() {
     if (backdrop) backdrop.classList.add('d-none');
 }
 
+function confirmarEImprimir() {
+    fecharToastImpressao();
+    window.print();
+}
+
 function prepararDadosImpressao() {
-    // 1. Dados Cabeçalho e Meta[cite: 2]
-    document.getElementById('print-numero').innerText = document.getElementById('ocorrencias-numero')?.value || "---";
-    document.getElementById('print-data').innerText = new Date().toLocaleDateString('pt-BR');
+    // 1. Dados Cabeçalho e Meta
+    setTxt('print-numero', obterValorElemento('ocorrencias-numero'));
+    setTxt('print-data', new Date().toLocaleDateString('pt-BR'));
     
-    const usuarioTexto = document.getElementById('usuario-nome')?.innerText.replace('Usuário:', '').trim();
-    document.getElementById('print-usuario').innerText = usuarioTexto || "---";
+    const usuarioEl = document.getElementById('usuario-nome');
+    const usuarioTexto = usuarioEl ? usuarioEl.innerText.replace('Usuário:', '').trim() : '';
+    setTxt('print-usuario', usuarioTexto);
 
-    // 2. Informações Gerais[cite: 2]
-    document.getElementById('print-maquina').innerText = document.getElementById('maquinas-nome-busca')?.value || "---";
-    document.getElementById('print-colaborador').innerText = document.getElementById('colaboradores-nome-busca')?.value || "---";
-    document.getElementById('print-produto').innerText = document.getElementById('produtos-nome-busca')?.value || "---";
-    document.getElementById('print-lote').innerText = document.getElementById('ocorrencias-lote-produto')?.value || "---";
-    document.getElementById('print-nf').innerText = document.getElementById('ocorrencias-numero-nota-fiscal')?.value || "---";
-    document.getElementById('print-data-ocorrencia').innerText = document.getElementById('ocorrencias-data')?.value?.replace('T', ' ') || "---";
-    document.getElementById('print-situacao').innerText = document.getElementById('ocorrencias-situacao')?.value || "---";
+    // 2. Informações Gerais
+    const maquina = obterValorElemento('maquinas-nome-busca') || obterValorElemento('maquinas-nome');
+    const colaborador = obterValorElemento('colaboradores-nome-busca') || obterValorElemento('colaboradores-nome');
+    const produto = obterValorElemento('produtos-nome-busca') || obterValorElemento('produtos-nome');
 
-    // 3. Descrição dos Problemas e Falhas (5W2H)[cite: 2]
-    document.getElementById('print-problema').innerText = document.getElementById('ocorrencias-problema')?.value || "---";
-    document.getElementById('print-falha-onde').innerText = document.getElementById('ocorrencias-falha-onde')?.value || "---";
-    document.getElementById('print-falha-como').innerText = document.getElementById('ocorrencias-falha-como')?.value || "---";
-    document.getElementById('print-falha-quando').innerText = document.getElementById('ocorrencias-falha-quando')?.value || "---";
-    document.getElementById('print-falha-quem').innerText = document.getElementById('ocorrencias-falha-quem')?.value || "---";
+    setTxt('print-maquina', maquina);
+    setTxt('print-colaborador', colaborador);
+    setTxt('print-produto', produto);
+    setTxt('print-lote', obterValorElemento('ocorrencias-lote-produto'));
+    setTxt('print-nf', obterValorElemento('ocorrencias-numero-nota-fiscal'));
+    setTxt('print-data-ocorrencia', obterValorElemento('ocorrencias-data').replace('T', ' '));
 
-    // 4. Ações e Observações[cite: 2]
-    document.getElementById('print-acao-corretiva').innerText = document.getElementById('ocorrencias-acao-corretiva')?.value || "---";
-    document.getElementById('print-observacoes').innerText = document.getElementById('ocorrencias-observacoes')?.value || "---";
-    document.getElementById('print-prazo').innerText = document.getElementById('ocorrencias-data-prazo')?.value || "---";
-    
-    document.getElementById('print-colaborador-assinatura').innerText = document.getElementById('colaboradores-nome-busca')?.value || "Colaborador Q.C Software";
+    // =====================================================================
+    // CORREÇÃO DEFINITIVA DO CAMPO SITUAÇÃO (Texto Preto e Remoção dos Ícones)
+    // =====================================================================
+    const situacaoTexto = obterValorElemento('ocorrencias-situacao') || "Pendente";
+    const elSituacao = document.getElementById('print-situacao');
+
+    if (elSituacao) {
+        // 1. Define o valor e remove estilos de cor anteriores
+        elSituacao.innerText = situacaoTexto;
+        elSituacao.className = ""; // Remove classes utilitárias como text-warning
+        elSituacao.style.color = "#000000";
+        elSituacao.style.fontWeight = "normal";
+
+        // 2. Localiza a linha da tabela (<tr>) correspondente e limpa os botões
+        const trPai = elSituacao.closest('tr');
+        if (trPai) {
+            // Remove botões de editar e eliminar
+            const botoes = trPai.querySelectorAll('button, .bi-pencil, .bi-trash, a');
+            botoes.forEach(btn => {
+                const elementoPai = btn.closest('button') || btn;
+                elementoPai.remove();
+            });
+
+            // Garante que a célula adjacente fique vazia
+            const celulas = trPai.querySelectorAll('td');
+            if (celulas.length > 1) {
+                celulas[1].innerHTML = '';
+            }
+        }
+    }
+
+    // 3. Descrição dos Problemas e Falhas (5W2H)
+    setTxt('print-problema', obterValorElemento('ocorrencias-problema'));
+    setTxt('print-falha-onde', obterValorElemento('ocorrencias-falha-onde'));
+    setTxt('print-falha-como', obterValorElemento('ocorrencias-falha-como'));
+    setTxt('print-falha-quando', obterValorElemento('ocorrencias-falha-quando'));
+    setTxt('print-falha-quem', obterValorElemento('ocorrencias-falha-quem'));
+
+    // 4. Ações e Observações
+    setTxt('print-acao-corretiva', obterValorElemento('ocorrencias-acao-corretiva'));
+    setTxt('print-observacoes', obterValorElemento('ocorrencias-observacoes'));
+    setTxt('print-prazo', obterValorElemento('ocorrencias-data-prazo'));
+    setTxt('print-colaborador-assinatura', colaborador || "Colaborador Q.C Software");
 
     // 5. Tratamento de Foto
     const imgPrint = document.getElementById('print-foto-img');
     const placeholder = document.getElementById('print-foto-placeholder');
     
-    if (typeof FOTO_OCORRENCIA_BASE64 !== "undefined" && FOTO_OCORRENCIA_BASE64) {
-        imgPrint.src = FOTO_OCORRENCIA_BASE64;
-        imgPrint.classList.remove('d-none');
-        placeholder.classList.add('d-none');
-    } else {
-        imgPrint.src = "";
-        imgPrint.classList.add('d-none');
-        placeholder.classList.remove('d-none');
+    if (imgPrint) {
+        if (typeof FOTO_OCORRENCIA_BASE64 !== "undefined" && FOTO_OCORRENCIA_BASE64) {
+            imgPrint.src = FOTO_OCORRENCIA_BASE64;
+            imgPrint.classList.remove('d-none');
+            if (placeholder) placeholder.classList.add('d-none');
+        } else {
+            imgPrint.src = "";
+            imgPrint.classList.add('d-none');
+            if (placeholder) placeholder.classList.remove('d-none');
+        }
     }
-}
-
-function confirmarEImprimir() {
-    fecharToastImpressao();
-    window.print();
 }
 
 // =========================================================================
@@ -574,25 +894,3 @@ document.addEventListener('DOMContentLoaded', () => {
         window.resetarVisualFoto();
     });
 });
-    
-// =========================================================================
-// 5. MANTER RELÓGIO COM DATA E HORA DE BRASÍLIA NA SIDEBAR
-// =========================================================================
-(function() {
-    function atualizarRelogio() {
-        const agora = new Date();
-        const opcoesData = { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' };
-        const opcoesHora = { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false };
-        
-        const dataStr = agora.toLocaleDateString('pt-BR', opcoesData);
-        const horaStr = agora.toLocaleTimeString('pt-BR', opcoesHora);
-        
-        const elData = document.getElementById('data-brasilia');
-        const elHora = document.getElementById('hora-brasilia');
-        
-        if (elData) elData.textContent = dataStr;
-        if (elHora) elHora.textContent = horaStr;
-    }
-    atualizarRelogio();
-    setInterval(atualizarRelogio, 10000);
-})();

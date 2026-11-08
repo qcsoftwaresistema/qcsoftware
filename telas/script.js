@@ -1,31 +1,157 @@
 const API_URL = "https://sistema.qcsoftware.com.br";
 
-// VARIÁVEIS DE CONTROLE DE ESTADO (PESQUISA E PAGINAÇÃO)
-let todosProdutos = [];      // Armazena a lista bruta vinda da API
-let produtosFiltrados = [];  // Armazena o resultado da busca por nome
+// VARIÁVEIS GLOBAIS DE PAGINAÇÃO
+let todosProdutos = [];
+let produtosFiltrados = [];
 let paginaAtual = 1;
 const ITENS_POR_PAGINA = 10;
 
-// -- Produtos
+// =========================================================================
+// 1. OBTENÇÃO DO PERFIL DO USUÁRIO LOGADO E DECLARAÇÃO GLOBAL
+// =========================================================================
+function obterIdPerfilUsuario() {
+    let perfilId = localStorage.getItem("id_perfis") || sessionStorage.getItem("id_perfis");
+    
+    if (!perfilId || perfilId === "undefined" || perfilId === "null") {
+        const chavesObjetos = ["qc_user", "usuario"];
+        for (const chave of chavesObjetos) {
+            const rawData = localStorage.getItem(chave) || sessionStorage.getItem(chave);
+            if (rawData) {
+                try {
+                    const obj = JSON.parse(rawData);
+                    if (obj && (obj.id_perfis || obj.id_perfil)) {
+                        perfilId = obj.id_perfis || obj.id_perfil;
+                        break;
+                    }
+                } catch (e) {
+                    console.error("Erro ao converter JSON do usuário:", e);
+                }
+            }
+        }
+    }
+    return (perfilId && perfilId !== "undefined" && perfilId !== "null") ? Number(perfilId) : null;
+}
+
+// DECLARAÇÃO GLOBAL: Resolve o erro "PERFIL_USUARIO is not defined" no listarProdutosCRUD()
+const PERFIL_USUARIO = obterIdPerfilUsuario();
+
+// Objeto global de permissões da tela
+let permissoesTelaProdutos = { visualizar: false, inserir: false, alterar: false, excluir: false };
+
+// =========================================================================
+// 2. INICIALIZAÇÃO E CONSULTA DE PERMISSÕES VIA API /permissoes/
+// =========================================================================
+async function inicializarTelaProdutos() {
+    console.log("Perfil ID identificado no navegador:", PERFIL_USUARIO);
+
+    if (PERFIL_USUARIO) {
+        try {
+            // 1. Tenta identificar o ID exato da tela de Produtos
+            let idTelaProdutos = 51; // ID padrão da tela de Produtos no seu banco de dados
+            
+            try {
+                const resTelas = await fetch("https://sistema.qcsoftware.com.br/telas/");
+                if (resTelas.ok) {
+                    const listaTelas = await resTelas.json();
+                    const telaProd = listaTelas.find(t => t.nome && t.nome.toLowerCase() === "produtos");
+                    if (telaProd && telaProd.id_telas) {
+                        idTelaProdutos = Number(telaProd.id_telas);
+                    }
+                }
+            } catch (eTelas) {
+                console.warn("Usando id_telas padrão (51) para Produtos.");
+            }
+
+            // 2. Busca a lista completa de permissões registradas na API
+            const resPerms = await fetch("https://sistema.qcsoftware.com.br/permissoes/");
+            
+            if (resPerms.ok) {
+                const listaPermissoes = await resPerms.json();
+
+                // Ordena por id_permissoes decrescente para pegar sempre a atualização mais recente do banco
+                const listaOrdenada = Array.isArray(listaPermissoes) 
+                    ? [...listaPermissoes].sort((a, b) => (b.id_permissoes || 0) - (a.id_permissoes || 0)) 
+                    : [];
+
+                // BUSCA EXATA: Filtra estritamente pelo id_perfis do usuário E id_telas da tela de produtos
+                const permissaoEncontrada = listaOrdenada.find(p => 
+                    Number(p.id_perfis) === Number(PERFIL_USUARIO) && Number(p.id_telas) === Number(idTelaProdutos)
+                );
+
+                if (permissaoEncontrada) {
+                    permissoesTelaProdutos = {
+                        visualizar: Boolean(permissaoEncontrada.visualizar),
+                        inserir: Boolean(permissaoEncontrada.inserir),
+                        alterar: Boolean(permissaoEncontrada.alterar),
+                        excluir: Boolean(permissaoEncontrada.excluir)
+                    };
+                    console.log(`Permissões exatas para Perfil ${PERFIL_USUARIO} na Tela Produtos (${idTelaProdutos}):`, permissoesTelaProdutos);
+                } else {
+                    console.warn(`Nenhuma permissão específica encontrada no banco para perfil ${PERFIL_USUARIO} na tela ${idTelaProdutos}. Bloqueando ações por segurança.`);
+                    permissoesTelaProdutos = { visualizar: false, inserir: false, alterar: false, excluir: false };
+                }
+            } else {
+                console.error("Erro ao consultar /permissoes/. Status HTTP:", resPerms.status);
+            }
+        } catch (e) {
+            console.error("Erro ao processar verificação de permissões:", e);
+        }
+    }
+
+    // 3. Aplica os bloqueios/liberações nos elementos e botões da tela
+    aplicarPermissoesVisuais();
+
+    // 4. Executa a listagem da tabela apenas se tiver permissão de visualização
+    if (permissoesTelaProdutos.visualizar) {
+        listarProdutosCRUD();
+    } else {
+        const tabela = document.getElementById('tabela-produtos');
+        if (tabela) {
+            tabela.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-4"><i class="bi bi-lock-fill"></i> Acesso Negado: Seu perfil não possui permissão para visualizar produtos.</td></tr>`;
+        }
+    }
+}
+
+function aplicarPermissoesVisuais() {
+    const formProdutos = document.getElementById('formProdutos');
+    const btnSalvar = formProdutos ? formProdutos.querySelector('button[type="submit"]') : null;
+    
+    if (btnSalvar) {
+        if (!permissoesTelaProdutos.inserir && !permissoesTelaProdutos.alterar) {
+            btnSalvar.disabled = true;
+            btnSalvar.innerText = "Sem permissão para salvar";
+            btnSalvar.classList.replace('btn-primary', 'btn-secondary');
+        } else {
+            btnSalvar.disabled = false;
+            btnSalvar.innerText = "Salvar";
+            btnSalvar.classList.replace('btn-secondary', 'btn-primary');
+        }
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    inicializarTelaProdutos();
+});
+
 // =========================================================================
 // 1. LISTAR PRODUTOS (READ com Filtro e Paginação)
 // =========================================================================
 async function listarProdutosCRUD() {
     try {
-        // 1. LIMPEZA PREVENTIVA: Esvazia o array e põe um feedback de carregando
         todosProdutos = []; 
         const tabela = document.getElementById('tabela-produtos');
         if (tabela) {
             tabela.innerHTML = `<tr><td colspan="4" class="text-center py-4">Carregando produtos...</td></tr>`;
         }
 
-        // 2. FETCH CORRIGIDO: Passando o objeto de opções com o no-store
         const res = await fetch(`${API_URL}/produtos/`, {
             method: 'GET',
-            cache: 'no-store' // <--- Garante que o Render/Navegador traga direto do banco
+            cache: 'no-store',
+            headers: { 'x-perfil-id': PERFIL_USUARIO } 
         });
             
         if (!res.ok) {
+            if (res.status === 403) throw new Error("Acesso negado: Você não tem permissão para visualizar.");
             throw new Error(`Erro no servidor: Status ${res.status}`);
         }
 
@@ -34,7 +160,6 @@ async function listarProdutosCRUD() {
         const totalBadge = document.getElementById('total-produtos');
         if (totalBadge) totalBadge.innerText = todosProdutos.length;
 
-        // Processa o filtro inicial e pagina os resultados
         filtrarEAtualizarTabela();
 
     } catch (e) { 
@@ -53,48 +178,32 @@ async function listarProdutosCRUD() {
     }
 }
 
-// FUNÇÃO INTERNA: Filtra os produtos por nome e calcula as páginas disponíveis
 function filtrarEAtualizarTabela() {
     const termoPesquisa = document.getElementById('pesquisa-produto')?.value.toLowerCase() || "";
     
-    // Filtra pelo nome do produto digitado
-produtosFiltrados = todosProdutos.filter(p =>
-    p.nome && p.nome.toLowerCase().includes(termoPesquisa)
-);
-
-// ===============================
-// ORDENAÇÃO ALFABÉTICA
-// ===============================
-produtosFiltrados.sort((a, b) =>
-    a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
-);
-
-// ===============================
-// ÚLTIMO CADASTRADO NO TOPO
-// ===============================
-
-// Pega o último item cadastrado da API
-const ultimoCadastro = todosProdutos[todosProdutos.length - 1];
-
-if (ultimoCadastro) {
-
-    // Remove ele da posição atual
-    produtosFiltrados = produtosFiltrados.filter(
-        p => p.id_produtos !== ultimoCadastro.id_produtos
+    produtosFiltrados = todosProdutos.filter(p =>
+        p.nome && p.nome.toLowerCase().includes(termoPesquisa)
     );
 
-    // Adiciona no topo
-    produtosFiltrados.unshift(ultimoCadastro);
-}
+    produtosFiltrados.sort((a, b) =>
+        a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
+    );
+
+    const ultimoCadastro = todosProdutos[todosProdutos.length - 1];
+
+    if (ultimoCadastro) {
+        produtosFiltrados = produtosFiltrados.filter(
+            p => p.id_produtos !== ultimoCadastro.id_produtos
+        );
+        produtosFiltrados.unshift(ultimoCadastro);
+    }
 
     const totalPaginas = Math.ceil(produtosFiltrados.length / ITENS_POR_PAGINA) || 1;
     
-    // Evita que a página atual fique em um limbo vazio se a filtragem reduzir drasticamente os itens
     if (paginaAtual > totalPaginas) {
         paginaAtual = totalPaginas;
     }
 
-    // Calcula os cortes exatos para exibir o limite de 10 por página
     const indiceInicial = (paginaAtual - 1) * ITENS_POR_PAGINA;
     const indiceFinal = indiceInicial + ITENS_POR_PAGINA;
     const produtosExibidos = produtosFiltrados.slice(indiceInicial, indiceFinal);
@@ -103,7 +212,6 @@ if (ultimoCadastro) {
     atualizarControlesPaginacao(totalPaginas);
 }
 
-// FUNÇÃO INTERNA: Renderiza as linhas visíveis na tabela (CORRIGIDO PARA id_produtos)
 function renderizarTabela(produtos) {
     const tabela = document.getElementById('tabela-produtos');
     if (!tabela) return;
@@ -117,33 +225,29 @@ function renderizarTabela(produtos) {
         return;
     }
 
-        tabela.innerHTML = produtos.map(p => {
-            // CORREÇÃO EXATA: Captura o ID baseado na estrutura real do seu banco (id_produtos)
-            let idBruto = undefined;
-            
-            if (p) {
-                if (p.id_produtos !== undefined && p.id_produtos !== null) idBruto = p.id_produtos;
-                else if (p.id !== undefined && p.id !== null) idBruto = p.id;
-                else if (p._id !== undefined && p._id !== null) idBruto = p._id;
-            }
-            
-            // Converte o ID encontrado (ex: 11) em uma String limpa
-            const produtoId = idBruto !== undefined ? idBruto.toString().trim() : "";
+    tabela.innerHTML = produtos.map(p => {
+        let idBruto = undefined;
+        
+        if (p) {
+            if (p.id_produtos !== undefined && p.id_produtos !== null) idBruto = p.id_produtos;
+            else if (p.id !== undefined && p.id !== null) idBruto = p.id;
+            else if (p._id !== undefined && p._id !== null) idBruto = p._id;
+        }
+        
+        const produtoId = idBruto !== undefined ? idBruto.toString().trim() : "";
 
-            // Se mesmo assim não encontrar nada, exibe o aviso
-            if (!produtoId) {
-                console.warn("Produto sem ID detectado. Estrutura recebida do banco:", p);
-                return `
-                    <tr class="table-warning">
-                        <td><strong>${p.nome || "Sem Nome"}</strong></td>
-                        <td>${p.categoria || "Sem Categoria"}</td>
-                        <td><span class="badge bg-warning text-dark">Erro de ID</span></td>
-                        <td class="text-end text-muted small">⚠️ ID ausente</td>
-                    </tr>
-                `;
-            }
+        if (!produtoId) {
+            console.warn("Produto sem ID detectado. Estrutura recebida do banco:", p);
+            return `
+                <tr class="table-warning">
+                    <td><strong>${p.nome || "Sem Nome"}</strong></td>
+                    <td>${p.categoria || "Sem Categoria"}</td>
+                    <td><span class="badge bg-warning text-dark">Erro de ID</span></td>
+                    <td class="text-end text-muted small">⚠️ ID ausente</td>
+                </tr>
+            `;
+        }
 
-        // Mapeamento automático da Situação/Ativo (Sua API usa 'ativo: true')
         let situacaoTratada = "Ativo"; 
         if (p.ativo !== undefined && p.ativo !== null) {
             situacaoTratada = p.ativo;
@@ -151,7 +255,6 @@ function renderizarTabela(produtos) {
             situacaoTratada = p.situacao;
         }
 
-        // Se o ativo for boolean (true/false), converte para texto amigável
         if (typeof situacaoTratada === 'boolean') {
             situacaoTratada = situacaoTratada ? "Ativo" : "Inativo";
         }
@@ -160,7 +263,6 @@ function renderizarTabela(produtos) {
             situacaoTratada = situacaoTratada.charAt(0).toUpperCase() + situacaoTratada.slice(1).toLowerCase();
         }
 
-        // IMPORTANTE: Unifica a propriedade para o resto do script entender como 'id' e 'situacao'
         p.id = produtoId;
         p.situacao = situacaoTratada;
 
@@ -170,30 +272,36 @@ function renderizarTabela(produtos) {
             ? 'bg-success-subtle text-success' 
             : 'bg-secondary-subtle text-secondary';
 
+        let botoesAcao = "";
+        if (permissoesTelaProdutos.alterar) {
+            botoesAcao += `<button class="btn btn-sm btn-outline-primary me-1 border-0" 
+                            onclick="prepararEdicaoSegura('${produtoEncoded}')" title="Editar produto">
+                                <i class="bi bi-pencil"></i>
+                           </button>`;
+        }
+        if (permissoesTelaProdutos.excluir) {
+            botoesAcao += `<button class="btn btn-sm btn-outline-danger border-0" 
+                            onclick="deletarItemGeral('produtos', '${produtoId}', listarProdutosCRUD)" title="Excluir produto">
+                                <i class="bi bi-trash"></i>
+                           </button>`;
+        }
+        if (!permissoesTelaProdutos.alterar && !permissoesTelaProdutos.excluir) {
+            botoesAcao = `<span class="badge bg-secondary">Sem permissão</span>`;
+        }
+
         return `
             <tr class="align-middle">                
                 <td><strong>${p.nome || "Sem Nome"}</strong></td>
                 <td>${p.categoria || "Sem Categoria"}</td>
                 <td><span class="badge ${badgeClasse}">${situacaoTratada}</span></td>
                 <td class="text-end">
-                
-        <button class="btn btn-sm btn-outline-primary me-1 border-0" 
-                onclick="prepararEdicaoSegura('${produtoEncoded}')" 
-                title="Editar produto">
-            <i class="bi bi-pencil"></i>
-        </button>
-        <button class="btn btn-sm btn-outline-danger border-0" 
-                onclick="deletarItemGeral('produtos', '${produtoId}', listarProdutosCRUD)" 
-                title="Excluir produto">
-            <i class="bi bi-trash"></i>
-        </button>
+                    ${botoesAcao}
                 </td>
             </tr>
         `;
     }).join('');
 }
 
-// FUNÇÃO INTERNA: Bloqueia ou libera os botões de controle de paginação
 function atualizarControlesPaginacao(totalPaginas) {
     const btnAnterior = document.getElementById('btn-anterior');
     const btnProximo = document.getElementById('btn-proximo');
@@ -216,22 +324,26 @@ document.getElementById('formProdutos')?.addEventListener('submit', async (e) =>
     const campoId = document.getElementById('prod-id');
     let id = campoId ? campoId.value.toString().trim() : "";
     
-    // CORREÇÃO DA EDIÇÃO: Tratamento estrito do ID fantasma. Se for nulo ou texto vazio vira POST
     if (!id || id === "" || id === "undefined" || id === "null") {
         id = null;
+    }
+
+    if (!id && !permissoesTelaProdutos.inserir) {
+        alert("Acesso negado: Você não tem permissão para inserir novos produtos.");
+        return;
+    }
+    if (id && !permissoesTelaProdutos.alterar) {
+        alert("Acesso negado: Você não tem permissão para alterar produtos existentes.");
+        return;
     }
     
     const nomeInput = document.getElementById('produtos-nome')?.value || "";
     const categoriaInput = document.getElementById('produtos-categoria')?.value || "";
     
-    // CORREÇÃO AQUI: Apenas capturamos o valor selecionado na tela ("true" ou "false")
     const selectSituacao = document.getElementById('produtos-situacao');
     const valorSelect = selectSituacao ? selectSituacao.value : "true";
-    
-    // Transforma a string do HTML em um Booleano real para o banco de dados
     const ativoBoolean = valorSelect === "true"; 
 
-    // DEFINIÇÃO DA ROTA E MÉTODO HTTP (Se id existe de verdade faz PUT, senão faz POST)
     const url = id ? `${API_URL}/produtos/${id}` : `${API_URL}/produtos/`;
     const metodo = id ? 'PUT' : 'POST';
 
@@ -239,32 +351,30 @@ document.getElementById('formProdutos')?.addEventListener('submit', async (e) =>
         let options = {};
         const fileInput = document.getElementById('foto-arquivo');
 
-        // Estratégia multipart/form-data ou JSON puro baseado em anexos
         if (fileInput && fileInput.files.length > 0) {
             const formData = new FormData();
             formData.append('nome', nomeInput);
             formData.append('categoria', categoriaInput);
-            
-            // Enviando com a chave 'ativo' que o backend espera.
             formData.append('ativo', ativoBoolean); 
             formData.append('file', fileInput.files[0]);
 
             options = {
                 method: metodo,
+                headers: { 'x-perfil-id': PERFIL_USUARIO },
                 body: formData
             };
         } else {
-            // No JSON puro, enviamos o booleano real sem aspas
             const payloadJSON = {
                 nome: nomeInput,
                 categoria: categoriaInput,
-                ativo: ativoBoolean // Chave 'ativo' idêntica à coluna do banco de dados
+                ativo: ativoBoolean 
             };
 
             options = {
                 method: metodo,
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-perfil-id': PERFIL_USUARIO
                 },
                 body: JSON.stringify(payloadJSON)
             };
@@ -274,14 +384,13 @@ document.getElementById('formProdutos')?.addEventListener('submit', async (e) =>
         
         if (res.ok) {
             e.target.reset(); 
-            if (campoId) campoId.value = ""; // Limpa completamente o id oculto
+            if (campoId) campoId.value = ""; 
             
             const tituloForm = document.getElementById('titulo-form-prod');
             if (tituloForm) {
                 tituloForm.innerHTML = '<i class="bi bi-box-seam text-primary me-2"></i>Novo Produto';
             }
             
-            // DISPARO DA NOTIFICAÇÃO DE SUCESSO (Canto inferior direito)
             if (metodo === 'POST') {
                 dispararNotificacao("Novo cadastro criado com sucesso!", "criar");
             } else {
@@ -290,9 +399,13 @@ document.getElementById('formProdutos')?.addEventListener('submit', async (e) =>
             
             listarProdutosCRUD();
         } else {
-            const erroApi = await res.json().catch(() => ({}));
-            console.error("Detalhes do erro do servidor:", erroApi);
-            alert(`Erro ao salvar produto. Status: ${res.status}\nMotivo: ${erroApi.detail || erroApi.message || 'Erro interno no backend'}`);
+            if (res.status === 403) {
+                alert("Acesso negado: Você não tem permissão para realizar esta ação no servidor.");
+            } else {
+                const erroApi = await res.json().catch(() => ({}));
+                console.error("Detalhes do erro do servidor:", erroApi);
+                alert(`Erro ao salvar produto. Status: ${res.status}\nMotivo: ${erroApi.detail || erroApi.message || 'Erro interno no backend'}`);
+            }
         }
     } catch (err) { 
         console.error("Erro no envio:", err);
@@ -300,13 +413,10 @@ document.getElementById('formProdutos')?.addEventListener('submit', async (e) =>
     }
 });
 
-
-
 // =========================================================================
 // 3. EXCLUIR PRODUTOS
 // =========================================================================
 async function deletarItemGeral(endpoint, id, callbackSucesso) {
-    // CORREÇÃO DA EXCLUSÃO: Validação estrita do parâmetro recebido
     if (!id || id === undefined || id === null || id.toString().trim() === "" || id.toString() === "undefined" || id.toString() === "null") {
         alert("Não é possível deletar este item: ID inválido ou ausente.");
         return;
@@ -318,16 +428,20 @@ async function deletarItemGeral(endpoint, id, callbackSucesso) {
 
     try {
         const res = await fetch(`${API_URL}/${endpoint}/${id.toString().trim()}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'x-perfil-id': PERFIL_USUARIO } 
         });
 
         if (res.ok) {
-            // DISPARO DA NOTIFICAÇÃO DE EXCLUSÃO (Canto inferior direito)
             dispararNotificacao("Cadastro excluído com sucesso!", "excluir");
-            
             callbackSucesso();
         } else {
-            alert(`Não foi possível deletar o item. Código do servidor: ${res.status}`);
+            if (res.status === 403) {
+                alert("Acesso negado: Você não tem permissão para excluir registros.");
+            } else {
+                const erroApi = await res.json().catch(() => ({}));
+                alert(`Falha: ${erroApi.detail || res.status}`);
+            }
         }
     } catch (error) {
         console.error("Erro ao deletar:", error);
@@ -353,21 +467,17 @@ function prepararEdicaoProduto(p) {
     const campoCategoria = document.getElementById('produtos-categoria');
     const campoSituacao = document.getElementById('produtos-situacao');
     
-    // Força a extração do ID correto convertido em string limpa
     const idLimpo = (p.id !== undefined ? p.id : (p._id || "")).toString().trim();
     
     if (campoId) campoId.value = idLimpo;
     if (campoNome) campoNome.value = p.nome || "";
     if (campoCategoria) campoCategoria.value = p.categoria || "";
     
-    // CORREÇÃO AQUI: Garante o preenchimento correto do select de Situação (Ativo/Inativo)
     if (campoSituacao) {
-        // Verifica todas as possibilidades do que pode vir do banco/objeto (Boolean ou String)
         const ehInativo = p.ativo === false || 
                           p.ativo === "false" || 
                           (p.situacao && String(p.situacao).toLowerCase() === "inativo");
 
-        // Define "false" para Inativo e "true" para Ativo (casando com o value das <option>)
         campoSituacao.value = ehInativo ? "false" : "true";
     }
     
@@ -440,31 +550,120 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// - Cargos
-
 // =========================================================================
-// VARIÁVEIS DE CONTROLE DE ESTADO PARA CARGOS
+// VARIÁVEIS DE CONTROLE DE ESTADO E PERMISSÕES PARA CARGOS
 // =========================================================================
 let todosCargos = [];       // Armazena a lista bruta vinda da API
 let cargosFiltrados = [];   // Armazena o resultado da busca por nome
 let paginaAtualCargos = 1;  // Variável de página separada para não chocar com produtos
+
+// Objeto de controle de permissões para a tela de Cargos
+let permissoesTelaCargos = { visualizar: false, inserir: false, alterar: false, excluir: false };
+
+// =========================================================================
+// 0. INICIALIZAÇÃO E CONSULTA DINÂMICA DE PERMISSÕES (TELA CARGOS)
+// =========================================================================
+async function inicializarTelaCargos() {
+    const perfilId = typeof PERFIL_USUARIO !== 'undefined' ? PERFIL_USUARIO : obterIdPerfilUsuario();
+    console.log("Perfil ID identificado na tela de Cargos:", perfilId);
+
+    if (perfilId) {
+        try {
+            // Identifica a ID da tela de Cargos (padrão no banco de dados)
+            let idTelaCargos = 52; 
+
+            try {
+                const resTelas = await fetch("https://sistema.qcsoftware.com.br/telas/");
+                if (resTelas.ok) {
+                    const listaTelas = await resTelas.json();
+                    const telaEncontrada = listaTelas.find(t => t.nome && t.nome.toLowerCase() === "cargos");
+                    if (telaEncontrada && telaEncontrada.id_telas) {
+                        idTelaCargos = Number(telaEncontrada.id_telas);
+                    }
+                }
+            } catch (eTelas) {
+                console.warn("Usando id_telas padrão (52) para Cargos.");
+            }
+
+            // Busca as permissões gravadas na API /permissoes/
+            const resPerms = await fetch("https://sistema.qcsoftware.com.br/permissoes/");
+            
+            if (resPerms.ok) {
+                const listaPermissoes = await resPerms.json();
+
+                // Ordena por id_permissoes decrescente para pegar a alteração mais recente
+                const listaOrdenada = Array.isArray(listaPermissoes) 
+                    ? [...listaPermissoes].sort((a, b) => (b.id_permissoes || 0) - (a.id_permissoes || 0)) 
+                    : [];
+
+                // Filtro estrito para a combinação id_perfis + id_telas
+                const permissaoEncontrada = listaOrdenada.find(p => 
+                    Number(p.id_perfis) === Number(perfilId) && Number(p.id_telas) === Number(idTelaCargos)
+                );
+
+                if (permissaoEncontrada) {
+                    permissoesTelaCargos = {
+                        visualizar: Boolean(permissaoEncontrada.visualizar),
+                        inserir: Boolean(permissaoEncontrada.inserir),
+                        alterar: Boolean(permissaoEncontrada.alterar),
+                        excluir: Boolean(permissaoEncontrada.excluir)
+                    };
+                    console.log(`Permissões da Tela Cargos (Perfil ${perfilId}):`, permissoesTelaCargos);
+                } else {
+                    console.warn(`Nenhuma permissão específica para perfil ${perfilId} na tela de Cargos.`);
+                    permissoesTelaCargos = { visualizar: false, inserir: false, alterar: false, excluir: false };
+                }
+            }
+        } catch (e) {
+            console.error("Erro ao carregar permissões da tela de Cargos:", e);
+        }
+    }
+
+    // Aplica restrições na interface
+    aplicarPermissoesVisuaisCargos();
+
+    // Carrega dados apenas se puder visualizar
+    if (permissoesTelaCargos.visualizar) {
+        listarCargosCRUD();
+    } else {
+        const tabela = document.getElementById('tabela-cargos');
+        if (tabela) {
+            tabela.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-4"><i class="bi bi-lock-fill"></i> Acesso Negado: Seu perfil não possui permissão para visualizar os cargos.</td></tr>`;
+        }
+    }
+}
+
+function aplicarPermissoesVisuaisCargos() {
+    const formCargos = document.getElementById('formCargos');
+    const btnSalvar = formCargos ? formCargos.querySelector('button[type="submit"]') : null;
+    
+    if (btnSalvar) {
+        if (!permissoesTelaCargos.inserir && !permissoesTelaCargos.alterar) {
+            btnSalvar.disabled = true;
+            btnSalvar.innerText = "Sem permissão para salvar";
+            btnSalvar.classList.replace('btn-primary', 'btn-secondary');
+        } else {
+            btnSalvar.disabled = false;
+            btnSalvar.innerText = "Salvar";
+            btnSalvar.classList.replace('btn-secondary', 'btn-primary');
+        }
+    }
+}
 
 // =========================================================================
 // 1. LISTAR CARGOS (READ com Filtro e Paginação)
 // =========================================================================
 async function listarCargosCRUD() {
     try {
-        // 1. LIMPEZA PREVENTIVA: Reseta as variáveis e limpa a tabela para não exibir dados antigos
         todosCargos = []; 
         const tabela = document.getElementById('tabela-cargos');
         if (tabela) {
             tabela.innerHTML = `<tr><td colspan="4" class="text-center py-4">Carregando cargos...</td></tr>`;
         }
 
-        // 2. FETCH CORRIGIDO: O cache 'no-store' deve ir dentro do objeto de opções
         const res = await fetch(`${API_URL}/cargos/`, {
             method: 'GET',
-            cache: 'no-store' // <--- Agora sim o navegador ignora o cache e busca direto do servidor
+            cache: 'no-store'
         });
         
         if (!res.ok) {
@@ -476,7 +675,6 @@ async function listarCargosCRUD() {
         const totalBadge = document.getElementById('total-cargos');
         if (totalBadge) totalBadge.innerText = todosCargos.length;
 
-        // Processa o filtro inicial e pagina os resultados
         filtrarEAtualizarTabelaCargos();
 
     } catch (e) { 
@@ -495,39 +693,25 @@ async function listarCargosCRUD() {
     }
 }
 
-// FUNÇÃO INTERNA: Filtra os cargos por nome e calcula as páginas disponíveis
 function filtrarEAtualizarTabelaCargos() {
     const termoPesquisa = document.getElementById('pesquisa-cargo')?.value.toLowerCase() || "";
     
-    // Filtra pelo nome do cargo digitado
-cargosFiltrados = todosCargos.filter(c =>
-    c.nome && c.nome.toLowerCase().includes(termoPesquisa)
-);
-
-// ===============================
-// ORDENAÇÃO ALFABÉTICA
-// ===============================
-cargosFiltrados.sort((a, b) =>
-    a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
-);
-
-// ===============================
-// ÚLTIMO CADASTRADO NO TOPO
-// ===============================
-
-// Pega o último item cadastrado da API
-const ultimoCadastro = todosCargos[todosCargos.length - 1];
-
-if (ultimoCadastro) {
-
-    // Remove ele da posição atual
-    cargosFiltrados = cargosFiltrados.filter(
-        c => c.id_cargos !== ultimoCadastro.id_cargos
+    cargosFiltrados = todosCargos.filter(c =>
+        c.nome && c.nome.toLowerCase().includes(termoPesquisa)
     );
 
-    // Adiciona no topo
-    cargosFiltrados.unshift(ultimoCadastro);
-}
+    cargosFiltrados.sort((a, b) =>
+        a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
+    );
+
+    const ultimoCadastro = todosCargos[todosCargos.length - 1];
+
+    if (ultimoCadastro) {
+        cargosFiltrados = cargosFiltrados.filter(
+            c => c.id_cargos !== ultimoCadastro.id_cargos
+        );
+        cargosFiltrados.unshift(ultimoCadastro);
+    }
 
     const totalPaginas = Math.ceil(cargosFiltrados.length / ITENS_POR_PAGINA) || 1;
     
@@ -535,7 +719,6 @@ if (ultimoCadastro) {
         paginaAtualCargos = totalPaginas;
     }
 
-    // Calcula os cortes exatos para exibir o limite de 10 por página
     const indiceInicial = (paginaAtualCargos - 1) * ITENS_POR_PAGINA;
     const indiceFinal = indiceInicial + ITENS_POR_PAGINA;
     const cargosExibidos = cargosFiltrados.slice(indiceInicial, indiceFinal);
@@ -544,7 +727,6 @@ if (ultimoCadastro) {
     atualizarControlesPaginacaoCargos(totalPaginas);
 }
 
-// FUNÇÃO INTERNA: Renderiza as linhas visíveis na tabela de cargos
 function renderizarTabelaCargos(cargos) {
     const tabela = document.getElementById('tabela-cargos');
     if (!tabela) return;
@@ -559,7 +741,6 @@ function renderizarTabelaCargos(cargos) {
     }
 
     tabela.innerHTML = cargos.map(c => {
-        // Captura o ID baseado na estrutura real do seu banco (id_cargos, id, _id)
         let idBruto = undefined;
         
         if (c) {
@@ -571,7 +752,6 @@ function renderizarTabelaCargos(cargos) {
         const cargoId = idBruto !== undefined ? idBruto.toString().trim() : "";
 
         if (!cargoId) {
-            console.warn("Cargo sem ID detectado. Estrutura recebida do banco:", c);
             return `
                 <tr class="table-warning">
                     <td><strong>${c.nome || "Sem Nome"}</strong></td>                    
@@ -581,7 +761,6 @@ function renderizarTabelaCargos(cargos) {
             `;
         }
 
-        // Mapeamento automático da Situação/Ativo
         let situacaoTratada = "Ativo"; 
         if (c.ativo !== undefined && c.ativo !== null) {
             situacaoTratada = c.ativo;
@@ -597,38 +776,49 @@ function renderizarTabelaCargos(cargos) {
             situacaoTratada = situacaoTratada.charAt(0).toUpperCase() + situacaoTratada.slice(1).toLowerCase();
         }
 
-        // Unifica a propriedade para o resto do script entender como 'id' e 'situacao'
         c.id = cargoId;
         c.situacao = situacaoTratada;
 
         const cargoEncoded = encodeURIComponent(JSON.stringify(c));
-        
         const badgeClasse = situacaoTratada === 'Ativo' 
             ? 'bg-success-subtle text-success' 
             : 'bg-secondary-subtle text-secondary';
+
+        // CONSTRUÇÃO REATIVA DAS AÇÕES SEGUNDO AS PERMISSÕES DO BANCO
+        let acoesHtml = '';
+        if (!permissoesTelaCargos.alterar && !permissoesTelaCargos.excluir) {
+            acoesHtml = `<span class="badge bg-secondary">Sem permissão</span>`;
+        } else {
+            if (permissoesTelaCargos.alterar) {
+                acoesHtml += `
+                    <button class="btn btn-sm btn-outline-primary me-1 border-0"
+                            onclick="prepararEdicaoSeguraCargo('${cargoEncoded}')" 
+                            title="Editar cargo">
+                        <i class="bi bi-pencil"></i>
+                    </button>`;
+            }
+            if (permissoesTelaCargos.excluir) {
+                acoesHtml += `
+                    <button class="btn btn-sm btn-outline-danger border-0" 
+                            onclick="excluirCargos('${cargoId}')" 
+                            title="Excluir cargo">
+                        <i class="bi bi-trash"></i>
+                    </button>`;
+            }
+        }
 
         return `
             <tr class="align-middle">                
                 <td><strong>${c.nome || "Sem Nome"}</strong></td>                
                 <td><span class="badge ${badgeClasse}">${situacaoTratada}</span></td>
                 <td class="text-end">
-                     <button class="btn btn-sm btn-outline-primary me-1 border-0"
-                            onclick="prepararEdicaoSeguraCargo('${cargoEncoded}')" 
-                            title="Editar cargo">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger border-0" 
-                            onclick="deletarItemGeral('cargos', '${cargoId}', listarCargosCRUD)" 
-                            title="Excluir cargo">
-                        <i class="bi bi-trash"></i>
-                    </button>
+                    ${acoesHtml}
                 </td>
             </tr>
         `;
     }).join('');
 }
 
-// FUNÇÃO INTERNA: Bloqueia ou libera os botões de controle de paginação de cargos
 function atualizarControlesPaginacaoCargos(totalPaginas) {
     const btnAnterior = document.getElementById('btn-anterior-cargos');
     const btnProximo = document.getElementById('btn-proximo-cargos');
@@ -651,10 +841,18 @@ document.getElementById('formCargos')?.addEventListener('submit', async (e) => {
     const campoId = document.getElementById('cargo-id');
     let id = campoId ? campoId.value.toString().trim() : "";
     if (!id || id === "" || id === "undefined" || id === "null") id = null;
+
+    // VALIDAÇÃO DE SEGURANÇA NO FRONT
+    if (!id && !permissoesTelaCargos.inserir) {
+        alert("Seu perfil não possui permissão para inserir novos cargos.");
+        return;
+    }
+    if (id && !permissoesTelaCargos.alterar) {
+        alert("Seu perfil não possui permissão para alterar cargos existentes.");
+        return;
+    }
     
     const nomeInput = document.getElementById('cargos-nome')?.value || "";
-    
-    // Captura o select e converte para Booleano nativo
     const selectSituacao = document.getElementById('cargos-situacao');
     const ativoBoolean = (selectSituacao ? selectSituacao.value : "true") === "true"; 
 
@@ -664,23 +862,28 @@ document.getElementById('formCargos')?.addEventListener('submit', async (e) => {
     try {
         const payloadJSON = {
             nome: nomeInput,
-            ativo: ativoBoolean // Nome da coluna do seu banco (geralmente 'ativo')
+            ativo: ativoBoolean
         };
+
+        const perfilId = typeof PERFIL_USUARIO !== 'undefined' ? PERFIL_USUARIO : obterIdPerfilUsuario();
 
         const res = await fetch(url, {
             method: metodo,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            },
             body: JSON.stringify(payloadJSON)
         });
         
         if (res.ok) {
             e.target.reset();
             if (campoId) campoId.value = "";
-            listarCargosCRUD(); // Sua função de atualizar a tabela de cargos
+            listarCargosCRUD();
             dispararNotificacao(metodo === 'POST' ? "Cargo criado com sucesso!" : "Cargo alterado com sucesso!", "atualizar");
         } else {
             const erroApi = await res.json().catch(() => ({}));
-            alert(`Erro ao salvar cargo: ${erroApi.message || 'Erro interno'}`);
+            alert(`Erro ao salvar cargo: ${erroApi.message || erroApi.detail || 'Erro interno'}`);
         }
     } catch (err) {
         console.error(err);
@@ -701,6 +904,11 @@ window.prepararEdicaoSeguraCargo = function(cargoEncoded) {
 };
 
 function prepararEdicaoCargo(c) {
+    if (!permissoesTelaCargos.alterar) {
+        alert("Seu perfil não tem permissão para alterar cargos.");
+        return;
+    }
+
     const campoId = document.getElementById('cargo-id');
     const campoNome = document.getElementById('cargos-nome');
     const campoSituacao = document.getElementById('cargos-situacao');
@@ -710,7 +918,6 @@ function prepararEdicaoCargo(c) {
     if (campoId) campoId.value = idLimpo;
     if (campoNome) campoNome.value = c.nome || "";
     
-    // Tratamento inteligente para a situação do cargo
     if (campoSituacao) {
         const ehInativo = c.ativo === false || 
                           c.ativo === "false" || 
@@ -728,24 +935,18 @@ function prepararEdicaoCargo(c) {
 }
 
 // =========================================================================
-// 4. OUVINTES DE EVENTOS DA PÁGINA (ADICIONADOS AO DOMContentLoaded EXISTENTE)
+// 4. OUVINTES DE EVENTOS DA PÁGINA
 // =========================================================================
-// Observação: Como você provavelmente já tem um `document.addEventListener('DOMContentLoaded', ...)`
-// você pode apenas colar essas linhas extras dentro dele, ou manter este bloco separado abaixo:
-
 document.addEventListener('DOMContentLoaded', () => {
-    // Inicializa a listagem de cargos se a tabela de cargos existir na página atual
     if (document.getElementById('tabela-cargos')) {
-        listarCargosCRUD();
+        inicializarTelaCargos();
     }
 
-    // Evento de digitação na caixa de pesquisa de cargos
     document.getElementById('pesquisa-cargo')?.addEventListener('input', () => {
         paginaAtualCargos = 1; 
         filtrarEAtualizarTabelaCargos();
     });
 
-    // Evento de clique para o botão "Anterior" dos cargos
     document.getElementById('btn-anterior-cargos')?.addEventListener('click', () => {
         if (paginaAtualCargos > 1) {
             paginaAtualCargos--;
@@ -753,7 +954,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Evento de clique para o botão "Próximo" dos cargos
     document.getElementById('btn-proximo-cargos')?.addEventListener('click', () => {
         const totalPaginas = Math.ceil(cargosFiltrados.length / ITENS_POR_PAGINA) || 1;
         if (paginaAtualCargos < totalPaginas) {
@@ -767,17 +967,25 @@ document.addEventListener('DOMContentLoaded', () => {
 // 5. EXCLUIR CARGOS
 // =========================================================================
 window.excluirCargos = async function(id) {
+    if (!permissoesTelaCargos.excluir) {
+        alert("Seu perfil não possui permissão para excluir cargos.");
+        return;
+    }
+
     if (!confirm("Tem certeza que deseja excluir este cargo?")) return;
 
     try {
-        // 1. Executa o DELETE garantindo que não pegue nenhuma resposta em cache
+        const perfilId = typeof PERFIL_USUARIO !== 'undefined' ? PERFIL_USUARIO : obterIdPerfilUsuario();
+
         const res = await fetch(`${API_URL}/cargos/${id}`, {
             method: 'DELETE',
-            cache: 'no-store'
+            cache: 'no-store',
+            headers: {
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            }
         });
 
         if (res.ok) {
-            // 2. Otimização de Memória Local (Remoção reativa caso exista um array global)
             if (typeof todosCargos !== 'undefined' && Array.isArray(todosCargos)) {
                 todosCargos = todosCargos.filter(c => {
                     const idC = c.id_cargos ?? c.id ?? c._id;
@@ -785,20 +993,18 @@ window.excluirCargos = async function(id) {
                 });
             }
 
-            // 3. Notifica o usuário usando o seu padrão visual
             if (typeof dispararNotificacao === "function") {
                 dispararNotificacao("Registro excluído com sucesso!", "deletar");
             } else {
                 alert("Registro excluído com sucesso!");
             }
 
-            // 4. Recarrega a listagem direto do servidor com os dados atualizados
             if (typeof listarCargosCRUD === "function") {
                 await listarCargosCRUD(); 
             }
         } else {
             const erroApi = await res.json().catch(() => ({}));
-            const mensagemErro = erroApi.message || 'Servidor recusou a ação';
+            const mensagemErro = erroApi.message || erroApi.detail || 'Servidor recusou a ação';
             
             if (typeof dispararNotificacao === "function") {
                 dispararNotificacao(`Erro ao excluir: ${mensagemErro}`, "erro");
@@ -816,31 +1022,144 @@ window.excluirCargos = async function(id) {
     }
 };
 
-// - Máquinas
-
 // =========================================================================
-// VARIÁVEIS DE CONTROLE DE ESTADO PARA MÁQUINAS
+// VARIÁVEIS DE CONTROLE DE ESTADO E PERMISSÕES PARA MÁQUINAS
 // =========================================================================
 let todasMaquinas = [];       // Armazena a lista bruta vinda da API
-let maquinasFiltrados = [];   // Armazena o resultado da busca por nome (mantido padrão de nomenclatura)
+let maquinasFiltrados = [];   // Armazena o resultado da busca por nome
 let paginaAtualMaquinas = 1;  // Controle de página exclusivo para máquinas
 
+// Objeto de controle de permissões exclusivo para a tela de Máquinas
+let permissoesTelaMaquinas = { visualizar: false, inserir: false, alterar: false, excluir: false };
+
 // =========================================================================
-// 1. LISTAR MÁQUINAS (READ com Filtro e Paginação) - CORRIGIDO
+// 0. INICIALIZAÇÃO E CONSULTA DINÂMICA DE PERMISSÕES (TELA MÁQUINAS)
+// =========================================================================
+async function inicializarTelaMaquinas() {
+    const perfilId = typeof PERFIL_USUARIO !== 'undefined' ? PERFIL_USUARIO : obterIdPerfilUsuario();
+    console.log("Perfil ID identificado na tela de Máquinas:", perfilId);
+
+    if (perfilId) {
+        try {
+            // ID padrão para a tela de Máquinas no seu banco de dados
+            let idTelaMaquinas = 50; 
+
+            try {
+                const resTelas = await fetch(`${API_URL}/telas/`).catch(() => fetch(`${API_URL}/tela/`));
+                if (resTelas && resTelas.ok) {
+                    const listaTelas = await resTelas.json();
+                    const telaEncontrada = listaTelas.find(t => 
+                        t.nome && (t.nome.toLowerCase() === "maquinas" || t.nome.toLowerCase() === "máquinas")
+                    );
+                    if (telaEncontrada && telaEncontrada.id_telas) {
+                        idTelaMaquinas = Number(telaEncontrada.id_telas);
+                    }
+                }
+            } catch (eTelas) {
+                console.warn("Usando id_telas padrão (50) para Máquinas.");
+            }
+
+            // Busca as permissões gravadas na API /permissoes/
+            const resPerms = await fetch(`${API_URL}/permissoes/`).catch(() => fetch(`${API_URL}/permissoes`));
+            
+            if (resPerms && resPerms.ok) {
+                const listaPermissoes = await resPerms.json();
+
+                // Ordena por id_permissoes decrescente para pegar a alteração mais recente
+                const listaOrdenada = Array.isArray(listaPermissoes) 
+                    ? [...listaPermissoes].sort((a, b) => (b.id_permissoes || 0) - (a.id_permissoes || 0)) 
+                    : [];
+
+                // Filtro estrito para o perfil e a tela de Máquinas
+                const permissaoEncontrada = listaOrdenada.find(p => 
+                    Number(p.id_perfis) === Number(perfilId) && Number(p.id_telas) === Number(idTelaMaquinas)
+                );
+
+                if (permissaoEncontrada) {
+                    permissoesTelaMaquinas = {
+                        visualizar: Boolean(permissaoEncontrada.visualizar),
+                        inserir: Boolean(permissaoEncontrada.inserir),
+                        alterar: Boolean(permissaoEncontrada.alterar),
+                        excluir: Boolean(permissaoEncontrada.excluir)
+                    };
+                    console.log(`Permissões da Tela Máquinas (Perfil ${perfilId}):`, permissoesTelaMaquinas);
+                } else {
+                    console.warn(`Nenhuma permissão específica para perfil ${perfilId} na tela de Máquinas.`);
+                    permissoesTelaMaquinas = { visualizar: false, inserir: false, alterar: false, excluir: false };
+                }
+            }
+        } catch (e) {
+            console.error("Erro ao carregar permissões da tela de Máquinas:", e);
+        }
+    }
+
+    // Aplica restrições visuais no formulário/botão salvar
+    aplicarPermissoesVisuaisMaquinas();
+
+    // Valida a exibição da listagem segundo o flag de visualização
+    if (permissoesTelaMaquinas.visualizar) {
+        listarMaquinasCRUD();
+    } else {
+        const tabela = document.getElementById('tabela-maquinas');
+        if (tabela) {
+            tabela.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center text-danger py-4 font-semibold">
+                        <i class="bi bi-lock-fill me-2"></i>Acesso Negado: Seu perfil não possui permissão para visualizar máquinas.
+                    </td>
+                </tr>
+            `;
+        }
+        
+        // Zera o contador visual do topo
+        const totalBadge = document.getElementById('total-maquinas');
+        if (totalBadge) totalBadge.innerText = "0";
+    }
+}
+
+function aplicarPermissoesVisuaisMaquinas() {
+    const formMaquinas = document.getElementById('formMaquinas');
+    const btnSalvar = formMaquinas ? formMaquinas.querySelector('button[type="submit"]') : null;
+    
+    // Se não puder visualizar ou não puder inserir nem alterar, desabilita todos os inputs do formulário
+    if (!permissoesTelaMaquinas.visualizar || (!permissoesTelaMaquinas.inserir && !permissoesTelaMaquinas.alterar)) {
+        if (formMaquinas) {
+            Array.from(formMaquinas.elements).forEach(element => {
+                if (element.tagName !== 'BUTTON') {
+                    element.disabled = true;
+                }
+            });
+        }
+    }
+
+    // Ajuste visual do botão Salvar
+    if (btnSalvar) {
+        if (!permissoesTelaMaquinas.inserir && !permissoesTelaMaquinas.alterar) {
+            btnSalvar.disabled = true;
+            btnSalvar.innerText = "Sem permissão para salvar";
+            btnSalvar.classList.replace('btn-primary', 'btn-secondary');
+        } else {
+            btnSalvar.disabled = false;
+            btnSalvar.innerText = "Salvar";
+            btnSalvar.classList.replace('btn-secondary', 'btn-primary');
+        }
+    }
+}
+
+// =========================================================================
+// 1. LISTAR MÁQUINAS (READ com Filtro e Paginação)
 // =========================================================================
 async function listarMaquinasCRUD() {
     try {
-        // 1. LIMPEZA PREVENTIVA: Zera os dados antigos e avisa que está carregando
         todasMaquinas = []; 
         const tabela = document.getElementById('tabela-maquinas');
         if (tabela) {
             tabela.innerHTML = `<tr><td colspan="4" class="text-center py-4">Carregando máquinas...</td></tr>`;
         }
 
-        // 2. FETCH: Passando o 'no-store' dentro das opções do fetch
         const res = await fetch(`${API_URL}/maquinas/`, {
             method: 'GET',
-            cache: 'no-store' // <--- Diz para o navegador ignorar o cache do Render
+            cache: 'no-store'
         });
         
         if (!res.ok) {
@@ -852,7 +1171,6 @@ async function listarMaquinasCRUD() {
         const totalBadge = document.getElementById('total-maquinas');
         if (totalBadge) totalBadge.innerText = todasMaquinas.length;
 
-        // Processa o filtro inicial e pagina os resultados
         filtrarEAtualizarTabelaMaquinas();
 
     } catch (e) { 
@@ -871,39 +1189,28 @@ async function listarMaquinasCRUD() {
     }
 }
 
-// FUNÇÃO INTERNA: Filtra as máquinas por nome e calcula as páginas disponíveis
 function filtrarEAtualizarTabelaMaquinas() {
     const termoPesquisa = document.getElementById('pesquisa-maquina')?.value.toLowerCase() || "";
     
-    // Filtra pelo nome da máquina digitada
     maquinasFiltrados = todasMaquinas.filter(m =>
         m.nome && m.nome.toLowerCase().includes(termoPesquisa)
     );
 
-    // ===============================
-    // ORDENAÇÃO ALFABÉTICA
-    // ===============================
     maquinasFiltrados.sort((a, b) =>
         a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
     );
 
-    // ===============================
-    // CORREÇÃO: ÚLTIMO CADASTRADO NO TOPO (Pega o ID dinamicamente e sem erros)
-    // ===============================
     const ultimoCadastro = todasMaquinas[todasMaquinas.length - 1];
 
     if (ultimoCadastro) {
-        // Captura o ID do último cadastro varrendo todas as possibilidades reais do banco
         const idUltimo = ultimoCadastro.id_maquinas || ultimoCadastro.id_maquina || ultimoCadastro.id || ultimoCadastro._id || "";
 
         if (idUltimo) {
-            // Remove ele da posição atual de forma segura convertendo para String
             maquinasFiltrados = maquinasFiltrados.filter(m => {
                 const idM = m.id_maquinas || m.id_maquina || m.id || m._id || "";
                 return idM.toString() !== idUltimo.toString();
             });
 
-            // Adiciona no topo da lista
             maquinasFiltrados.unshift(ultimoCadastro);
         }
     }
@@ -914,7 +1221,6 @@ function filtrarEAtualizarTabelaMaquinas() {
         paginaAtualMaquinas = totalPaginas;
     }
 
-    // Calcula os cortes exatos para exibir o limite de 10 por página
     const indiceInicial = (paginaAtualMaquinas - 1) * ITENS_POR_PAGINA;
     const indiceFinal = indiceInicial + ITENS_POR_PAGINA;
     const maquinasExibidas = maquinasFiltrados.slice(indiceInicial, indiceFinal);
@@ -923,7 +1229,6 @@ function filtrarEAtualizarTabelaMaquinas() {
     atualizarControlesPaginacaoMaquinas(totalPaginas);
 }
 
-// FUNÇÃO INTERNA: Renderiza as linhas visíveis na tabela de máquinas
 function renderizarTabelaMaquinas(maquinas) {
     const tabela = document.getElementById('tabela-maquinas');
     if (!tabela) return;
@@ -938,7 +1243,6 @@ function renderizarTabelaMaquinas(maquinas) {
     }
 
     tabela.innerHTML = maquinas.map(m => {
-        // CORREÇÃO DE VARREDURA: Adicionado 'id_maquinas' à checagem estrita
         let idBruto = undefined;
         
         if (m) {
@@ -950,7 +1254,6 @@ function renderizarTabelaMaquinas(maquinas) {
         
         const maquinaId = idBruto !== undefined ? idBruto.toString().trim() : "";
 
-        // Se mesmo assim o ID não for localizado, exibe o aviso visual que vimos na imagem
         if (!maquinaId) {
             console.warn("Máquina sem ID detectada. Estrutura recebida do banco:", m);
             return `
@@ -962,7 +1265,6 @@ function renderizarTabelaMaquinas(maquinas) {
             `;
         }
 
-        // Mapeamento automático da Situação/Ativo
         let situacaoTratada = "Ativo"; 
         if (m.ativo !== undefined && m.ativo !== null) {
             situacaoTratada = m.ativo;
@@ -978,7 +1280,6 @@ function renderizarTabelaMaquinas(maquinas) {
             situacaoTratada = situacaoTratada.charAt(0).toUpperCase() + situacaoTratada.slice(1).toLowerCase();
         }
 
-        // Garante a sincronização das propriedades internas para a Edição funcionar
         m.id = maquinaId;
         m.situacao = situacaoTratada;
 
@@ -988,28 +1289,41 @@ function renderizarTabelaMaquinas(maquinas) {
             ? 'bg-success-subtle text-success' 
             : 'bg-secondary-subtle text-secondary';
 
+        // MONTAGEM DINÂMICA DOS BOTÕES BASEADA NAS PERMISSÕES DO BANCO
+        let acoesHtml = '';
+        if (!permissoesTelaMaquinas.alterar && !permissoesTelaMaquinas.excluir) {
+            acoesHtml = `<span class="badge bg-secondary">Sem permissão</span>`;
+        } else {
+            if (permissoesTelaMaquinas.alterar) {
+                acoesHtml += `
+                    <button class="btn btn-sm btn-outline-primary me-1 border-0" 
+                            onclick="window.prepararEdicaoMaquina('${maquinaEncoded}')" 
+                            title="Editar máquina">
+                        <i class="bi bi-pencil"></i>
+                    </button>`;
+            }
+            if (permissoesTelaMaquinas.excluir) {
+                acoesHtml += `
+                    <button class="btn btn-sm btn-outline-danger border-0" 
+                            onclick="window.excluirMaquina('${maquinaId}')" 
+                            title="Excluir máquina">
+                        <i class="bi bi-trash"></i>
+                    </button>`;
+            }
+        }
+
         return `
             <tr class="align-middle">                
                 <td><strong>${m.nome || "Sem Nome"}</strong></td>
                 <td><span class="badge ${badgeClasse}">${situacaoTratada}</span></td>
                 <td class="text-end">
-                    <button class="btn btn-sm btn-outline-primary me-1 border-0" 
-                            onclick="window.prepararEdicaoMaquina('${maquinaEncoded}')" 
-                            title="Editar máquina">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger border-0" 
-                            onclick="window.excluirMaquina('${maquinaId}')" 
-                            title="Excluir máquina">
-                        <i class="bi bi-trash"></i>
-                    </button>
+                    ${acoesHtml}
                 </td>
             </tr>
         `;
     }).join('');
 }
 
-// FUNÇÃO INTERNA: Bloqueia ou libera os botões de controle de paginação de máquinas
 function atualizarControlesPaginacaoMaquinas(totalPaginas) {
     const btnAnterior = document.getElementById('btn-anterior-maquinas');
     const btnProximo = document.getElementById('btn-proximo-maquinas');
@@ -1024,17 +1338,26 @@ function atualizarControlesPaginacaoMaquinas(totalPaginas) {
 }
 
 // =========================================================================
-// 2. SALVAR OU ATUALIZAR CADASTRO (CREATE / UPDATE) - ID CORRIGIDO
+// 2. SALVAR OU ATUALIZAR CADASTRO (CREATE / UPDATE)
 // =========================================================================
 document.getElementById('formMaquinas')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    // CASAMENTO DE ID: Agora buscando exatamente o 'maq-id' do seu HTML
     const campoId = document.getElementById('maq-id');
     let id = campoId ? campoId.value.toString().trim() : "";
     
-    if (!id || id === "" || id === "undefined" || id === "null" || id === 0) {
+    if (!id || id === "" || id === "undefined" || id === "null" || id === "0") {
         id = null;
+    }
+
+    // VALIDAÇÕES DE SEGURANÇA NO FRONT-END
+    if (!id && !permissoesTelaMaquinas.inserir) {
+        alert("Seu perfil não possui permissão para inserir novas máquinas.");
+        return;
+    }
+    if (id && !permissoesTelaMaquinas.alterar) {
+        alert("Seu perfil não possui permissão para alterar máquinas existentes.");
+        return;
     }
     
     const nomeInput = document.getElementById('maquinas-nome')?.value || "";
@@ -1050,9 +1373,14 @@ document.getElementById('formMaquinas')?.addEventListener('submit', async (e) =>
             ativo: ativoBoolean
         };
 
+        const perfilId = typeof PERFIL_USUARIO !== 'undefined' ? PERFIL_USUARIO : obterIdPerfilUsuario();
+
         const res = await fetch(url, {
             method: metodo,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            },
             body: JSON.stringify(payloadJSON)
         });
         
@@ -1060,7 +1388,6 @@ document.getElementById('formMaquinas')?.addEventListener('submit', async (e) =>
             if (campoId) campoId.value = "";
             e.target.reset();
             
-            // CASAMENTO DE ID: Restaurando o título usando 'titulo-form-maq'
             const tituloForm = document.getElementById('titulo-form-maq');
             if (tituloForm) {
                 tituloForm.innerHTML = '<i class="sidebar-texto fas fa-industry me-3"></i> Nova Máquina';
@@ -1073,7 +1400,7 @@ document.getElementById('formMaquinas')?.addEventListener('submit', async (e) =>
             dispararNotificacao(metodo === 'POST' ? "Máquina criada com sucesso!" : "Máquina alterada com sucesso!", "atualizar");
         } else {
             const erroApi = await res.json().catch(() => ({}));
-            alert(`Erro ao salvar máquina: ${erroApi.message || 'Erro interno do servidor'}`);
+            alert(`Erro ao salvar máquina: ${erroApi.message || erroApi.detail || 'Erro interno do servidor'}`);
         }
     } catch (err) {
         console.error("Erro no processo de salvamento:", err);
@@ -1082,7 +1409,7 @@ document.getElementById('formMaquinas')?.addEventListener('submit', async (e) =>
 });
 
 // =========================================================================
-// 3. FUNÇÕES DE AUXÍLIO PARA EDIÇÃO DE MÁQUINAS - ID CORRIGIDO
+// 3. FUNÇÕES DE AUXÍLIO PARA EDIÇÃO DE MÁQUINAS
 // =========================================================================
 window.prepararEdicaoMaquina = function(maquinaEncoded) {
     try {
@@ -1094,7 +1421,11 @@ window.prepararEdicaoMaquina = function(maquinaEncoded) {
 };
 
 function carregarDadosNoFormMaquina(m) {
-    // CASAMENTO DE ID: Injeta o ID diretamente no 'maq-id'
+    if (!permissoesTelaMaquinas.alterar) {
+        alert("Seu perfil não possui permissão para alterar máquinas.");
+        return;
+    }
+
     const campoId = document.getElementById('maq-id');
     const campoNome = document.getElementById('maquinas-nome');
     const campoSituacao = document.getElementById('maquinas-situacao');
@@ -1122,7 +1453,6 @@ function carregarDadosNoFormMaquina(m) {
         campoSituacao.value = ehInativo ? "false" : "true";
     }
     
-    // CASAMENTO DE ID: Altera o texto usando o ID 'titulo-form-maq'
     const tituloForm = document.getElementById('titulo-form-maq');
     if (tituloForm) {
         tituloForm.innerHTML = '<i class="bi bi-pencil-square text-warning me-3"></i> Editar Máquina';
@@ -1132,11 +1462,11 @@ function carregarDadosNoFormMaquina(m) {
 }
 
 // =========================================================================
-// 4. OUVINTES DE EVENTOS DA PÁGINA (DENTRO DO DOMContentLoaded)
+// 4. OUVINTES DE EVENTOS DA PÁGINA
 // =========================================================================
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('tabela-maquinas')) {
-        listarMaquinasCRUD();
+        inicializarTelaMaquinas();
     }
 
     document.getElementById('pesquisa-maquina')?.addEventListener('input', () => {
@@ -1164,17 +1494,25 @@ document.addEventListener('DOMContentLoaded', () => {
 // 5. EXCLUIR MÁQUINAS
 // =========================================================================
 window.excluirMaquina = async function(id) {
+    if (!permissoesTelaMaquinas.excluir) {
+        alert("Seu perfil não possui permissão para excluir máquinas.");
+        return;
+    }
+
     if (!confirm("Tem certeza que deseja excluir esta máquina?")) return;
 
     try {
-        // 1. Executa o DELETE garantindo que não pegue nenhuma resposta em cache
+        const perfilId = typeof PERFIL_USUARIO !== 'undefined' ? PERFIL_USUARIO : obterIdPerfilUsuario();
+
         const res = await fetch(`${API_URL}/maquinas/${id}`, {
             method: 'DELETE',
-            cache: 'no-store'
+            cache: 'no-store',
+            headers: {
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            }
         });
 
         if (res.ok) {
-            // 2. Otimização de Memória Local (Remoção reativa caso exista um array global)
             if (typeof todasMaquinas !== 'undefined' && Array.isArray(todasMaquinas)) {
                 todasMaquinas = todasMaquinas.filter(m => {
                     const idM = m.id_maquinas ?? m.id ?? m._id;
@@ -1182,20 +1520,18 @@ window.excluirMaquina = async function(id) {
                 });
             }
 
-            // 3. Notifica o usuário usando o seu padrão visual
             if (typeof dispararNotificacao === "function") {
                 dispararNotificacao("Registro excluído com sucesso!", "deletar");
             } else {
                 alert("Registro excluído com sucesso!");
             }
 
-            // 4. Recarrega a listagem direto do servidor com os dados atualizados
             if (typeof listarMaquinasCRUD === "function") {
                 await listarMaquinasCRUD(); 
             }
         } else {
             const erroApi = await res.json().catch(() => ({}));
-            const mensagemErro = erroApi.message || 'Servidor recusou a ação';
+            const mensagemErro = erroApi.message || erroApi.detail || 'Servidor recusou a ação';
             
             if (typeof dispararNotificacao === "function") {
                 dispararNotificacao(`Erro ao excluir: ${mensagemErro}`, "erro");
@@ -1216,12 +1552,107 @@ window.excluirMaquina = async function(id) {
 //-- Colaboradores
 
 // =========================================================================
-// VARIÁVEIS DE CONTROLE DE ESTADO PARA COLABORADORES
+// VARIÁVEIS DE CONTROLE DE ESTADO E PERMISSÕES PARA COLABORADORES
 // =========================================================================
 let todosColaboradores = [];       // Armazena a lista bruta vinda da API
 let colaboradoresFiltrados = [];   // Armazena o resultado da busca por nome
 let paginaAtualColaboradores = 1;  // Controle de paginação exclusivo
-let listaDeCargos = [];            // CORREÇÃO: Declarada globalmente para evitar o erro "is not defined"
+let listaDeCargos = [];            // Declarada globalmente para evitar o erro "is not defined"
+
+// Objeto de controle de permissões exclusivo para a tela de Colaboradores
+let permissoesTelaColaboradores = { visualizar: false, inserir: false, alterar: false, excluir: false };
+
+// =========================================================================
+// 0. INICIALIZAÇÃO E CONSULTA DINÂMICA DE PERMISSÕES (TELA COLABORADORES)
+// =========================================================================
+async function inicializarTelaColaboradores() {
+    const perfilId = typeof PERFIL_USUARIO !== 'undefined' ? PERFIL_USUARIO : obterIdPerfilUsuario();
+    console.log("Perfil ID identificado na tela de Colaboradores:", perfilId);
+
+    if (perfilId) {
+        try {
+            // ID padrão para a tela de Colaboradores no seu banco de dados
+            let idTelaColaboradores = 53; 
+
+            try {
+                const resTelas = await fetch("https://sistema.qcsoftware.com.br/telas/");
+                if (resTelas.ok) {
+                    const listaTelas = await resTelas.json();
+                    const telaEncontrada = listaTelas.find(t => t.nome && t.nome.toLowerCase() === "colaboradores");
+                    if (telaEncontrada && telaEncontrada.id_telas) {
+                        idTelaColaboradores = Number(telaEncontrada.id_telas);
+                    }
+                }
+            } catch (eTelas) {
+                console.warn("Usando id_telas padrão (53) para Colaboradores.");
+            }
+
+            // Busca as permissões gravadas na API /permissoes/
+            const resPerms = await fetch("https://sistema.qcsoftware.com.br/permissoes/");
+            
+            if (resPerms.ok) {
+                const listaPermissoes = await resPerms.json();
+
+                // Ordena por id_permissoes decrescente para pegar a alteração mais recente
+                const listaOrdenada = Array.isArray(listaPermissoes) 
+                    ? [...listaPermissoes].sort((a, b) => (b.id_permissoes || 0) - (a.id_permissoes || 0)) 
+                    : [];
+
+                // Filtro estrito para o perfil e a tela de Colaboradores
+                const permissaoEncontrada = listaOrdenada.find(p => 
+                    Number(p.id_perfis) === Number(perfilId) && Number(p.id_telas) === Number(idTelaColaboradores)
+                );
+
+                if (permissaoEncontrada) {
+                    permissoesTelaColaboradores = {
+                        visualizar: Boolean(permissaoEncontrada.visualizar),
+                        inserir: Boolean(permissaoEncontrada.inserir),
+                        alterar: Boolean(permissaoEncontrada.alterar),
+                        excluir: Boolean(permissaoEncontrada.excluir)
+                    };
+                    console.log(`Permissões da Tela Colaboradores (Perfil ${perfilId}):`, permissoesTelaColaboradores);
+                } else {
+                    console.warn(`Nenhuma permissão específica para perfil ${perfilId} na tela de Colaboradores.`);
+                    permissoesTelaColaboradores = { visualizar: false, inserir: false, alterar: false, excluir: false };
+                }
+            }
+        } catch (e) {
+            console.error("Erro ao carregar permissões da tela de Colaboradores:", e);
+        }
+    }
+
+    // Aplica restrições visuais no formulário/botão salvar
+    aplicarPermissoesVisuaisColaboradores();
+
+    // Carrega os select-box de cargos
+    carregarCargosNoSelect();
+
+    // Carrega a listagem apenas se o perfil puder visualizar
+    if (permissoesTelaColaboradores.visualizar) {
+        listarColaboradoresCRUD();
+    } else {
+        const tabela = document.getElementById('tabela-colaboradores');
+        if (tabela) {
+            tabela.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-lock-fill"></i> Acesso Negado: Seu perfil não possui permissão para visualizar colaboradores.</td></tr>`;
+        }
+    }
+}
+
+function aplicarPermissoesVisuaisColaboradores() {
+    const formColaboradores = document.getElementById('formColaboradores') || document.getElementById('form-colaboradores');
+    const btnSalvar = formColaboradores ? formColaboradores.querySelector('button[type="submit"]') : null;
+    
+    if (btnSalvar) {
+        if (!permissoesTelaColaboradores.inserir && !permissoesTelaColaboradores.alterar) {
+            btnSalvar.disabled = true;
+            btnSalvar.innerText = "Sem permissão para salvar";
+            btnSalvar.classList.replace('btn-primary', 'btn-secondary');
+            btnSalvar.classList.replace('btn-warning', 'btn-secondary');
+        } else {
+            btnSalvar.disabled = false;
+        }
+    }
+}
 
 // =========================================================================
 // 1. CARREGAR OPÇÕES DO SELECT DE CARGOS (DINÂMICO)
@@ -1234,35 +1665,29 @@ async function carregarCargosNoSelect() {
     if (!inputBusca || !datalistCargos || !inputIdOculto) return;
 
     try {
-        // CORREÇÃO DO CACHE: Passado corretamente dentro da configuração do Fetch
         const res = await fetch(`${API_URL}/cargos/`, { cache: 'no-store' });
         if (res.ok) {
             const cargos = await res.json();
-            window.listaDeCargos = cargos; // Garante o salvamento para uso global na tabela
+            window.listaDeCargos = cargos;
 
-            // 1. Ordena os cargos recebidos em ordem alfabética pelo nome
             cargos.sort((a, b) => a.nome.localeCompare(b.nome));
             
-            // 2. Vincula o input de busca ao datalist
             inputBusca.setAttribute('list', 'lista-cargos-datalist');
 
-            // 3. Popula o datalist apenas com os nomes (o data-id guarda o ID de suporte)
             datalistCargos.innerHTML = cargos.map(c => {
                 const idCargo = c.id_cargos ?? c.id ?? c._id;
                 return `<option value="${c.nome}" data-id="${idCargo}"></option>`;
             }).join('');
 
-            // 4. FUNÇÃO REVERSA PARA A EDIÇÃO: Atualiza o texto visível com base no ID injetado
             window.atualizarInputVisualCargo = function(idAlvo) {
                 const opcao = Array.from(datalistCargos.options).find(opt => opt.getAttribute('data-id')?.toString() === idAlvo?.toString());
                 if (opcao) {
-                    inputBusca.value = opcao.value; // Joga o Nome real do cargo no campo de texto
+                    inputBusca.value = opcao.value;
                 } else {
                     inputBusca.value = "";
                 }
             };
 
-            // 5. Evento para capturar quando o usuário selecionar um cargo da lista manualmente
             inputBusca.addEventListener('input', function() {
                 const valorDigitado = this.value;
                 const opcaoSelecionada = Array.from(datalistCargos.options).find(opt => opt.value === valorDigitado);
@@ -1284,33 +1709,26 @@ async function carregarCargosNoSelect() {
 // =========================================================================
 async function listarColaboradoresCRUD() {
     try {
-        // 1. RESET DE ESTADO E LIMPEZA PREVENTIVA
         todosColaboradores = [];
         if (typeof colaboradoresFiltrados !== 'undefined') colaboradoresFiltrados = [];
 
-        // Proteção: Captura APENAS pelo ID exato para não sobrescrever tabelas de outras páginas
         const tabela = document.getElementById('tabela-colaboradores');
         if (tabela) {
             tabela.innerHTML = `<tr><td colspan="7" class="text-center py-4">Carregando colaboradores...</td></tr>`;
         }
 
-        // =========================================================================
-        // PASSO CRÍTICO: BUSCA CARGOS ATUALIZADOS DO SERVIDOR (CONTRA CACHE DA API)
-        // =========================================================================
         try {
             const resCargos = await fetch(`${API_URL}/cargos/`, {
                 method: 'GET',
-                cache: 'no-store' // Ignora o cache do servidor/API
+                cache: 'no-store'
             });
             if (resCargos.ok) {
-                // Sincroniza a lista global que a tabela usa para traduzir o ID em Nome
                 window.listaDeCargos = await resCargos.json();
             }
         } catch (erroCargos) {
             console.warn("Aviso: Falha ao atualizar lista de cargos para mapeamento:", erroCargos);
         }
 
-        // 2. REQUISIÇÃO FORÇANDO NO-STORE (DIRETO DO BANCO NO RENDER)
         const res = await fetch(`${API_URL}/colaboradores/`, {
             method: 'GET',
             cache: 'no-store'
@@ -1328,7 +1746,7 @@ async function listarColaboradoresCRUD() {
         console.error("Erro detalhado na requisição dos Colaboradores:", e); 
         const tabela = document.getElementById('tabela-colaboradores');
         if (tabela) {
-            tabela.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">⚠️ Erro ao carregar colaboradores.<br><small class="text-muted">Motivo: ${e.message}</small></td></tr>`;
+            tabela.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">⚠️ Erro ao carregar colaboradores.<br><small class="text-muted">Motivo: ${e.message}</small></td></tr>`;
         }
         
         if (typeof dispararNotificacao === "function") {
@@ -1340,30 +1758,20 @@ async function listarColaboradoresCRUD() {
 function filtrarEAtualizarTabelaColaboradores() {
     const termoPesquisa = document.getElementById('pesquisa-colaborador')?.value.toLowerCase() || "";
     
-    // Filtra pelo nome de colaborador digitado
     colaboradoresFiltrados = todosColaboradores.filter(c =>
         c.nome && c.nome.toLowerCase().includes(termoPesquisa)
     );
 
-    // ===============================
-    // ORDENAÇÃO ALFABÉTICA
-    // ===============================
     colaboradoresFiltrados.sort((a, b) =>
         a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
     );
 
-    // ===============================
-    // ÚLTIMO CADASTRADO NO TOPO
-    // ===============================
     const ultimoCadastro = todosColaboradores[todosColaboradores.length - 1];
 
     if (ultimoCadastro) {
-        // Remove ele da posição atual
         colaboradoresFiltrados = colaboradoresFiltrados.filter(
             c => c.id_colaboradores !== ultimoCadastro.id_colaboradores
         );
-
-        // Adiciona no topo
         colaboradoresFiltrados.unshift(ultimoCadastro);
     }
 
@@ -1386,7 +1794,7 @@ function renderizarTabelaColaboradores(colaboradores) {
     if (!tabela) return;
 
     if (!colaboradores || colaboradores.length === 0) {
-        tabela.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">Nenhum colaborador encontrado.</td></tr>`;
+        tabela.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">Nenhum colaborador encontrado.</td></tr>`;
         return;
     }
 
@@ -1395,7 +1803,7 @@ function renderizarTabelaColaboradores(colaboradores) {
         const colaboradorId = idRegistroAtual !== undefined ? idRegistroAtual.toString().trim() : "";
 
         if (!colaboradorId) {
-            return `<tr class="table-warning"><td colspan="6" class="text-center">⚠️ Registro sem ID</td></tr>`;
+            return `<tr class="table-warning"><td colspan="7" class="text-center">⚠️ Registro sem ID</td></tr>`;
         }
 
         const registroEstaAtivo = c.ativo === true || c.ativo === "true" || 
@@ -1406,9 +1814,6 @@ function renderizarTabelaColaboradores(colaboradores) {
         c.idUnificado = colaboradorId;   
         c.ativo = registroEstaAtivo;     
 
-        // =========================================================================
-        // TRATAMENTO UNIFICADO DO CARGO (CONSULTA DIRETA EM WINDOW.LISTADECARGOS)
-        // =========================================================================
         let nomeCargoExibicao = "-";
         let idCargoLimpo = ""; 
 
@@ -1419,10 +1824,7 @@ function renderizarTabelaColaboradores(colaboradores) {
                 nomeCargoExibicao = cargoBruto.nome || "-";
                 idCargoLimpo = cargoBruto.id_cargos ?? cargoBruto.id ?? cargoBruto._id ?? "";
             } else {
-                // Isola o ID removendo possíveis prefixos de texto
                 idCargoLimpo = String(cargoBruto).replace(/[^\d]/g, '') || String(cargoBruto).trim();
-                
-                // Pega a lista sincronizada pelo datalist no escopo global da aplicação
                 const listaGlobal = window.listaDeCargos || [];
                 
                 const cargoEncontrado = listaGlobal.find(cargo => {
@@ -1433,17 +1835,38 @@ function renderizarTabelaColaboradores(colaboradores) {
                 if (cargoEncontrado) {
                     nomeCargoExibicao = cargoEncontrado.nome;
                 } else {
-                    // Mantém o valor bruto original (ex: "Analista de Qualidade *&520") se não achar o ID isolado
                     nomeCargoExibicao = isNaN(cargoBruto) ? cargoBruto : `Cargo ${cargoBruto}`;
                 }
             }
         }
 
-        // Deixa salvo no objeto do colaborador para o formulário de edição ler instantaneamente
         c.id_cargo_tratado = idCargoLimpo;
         c.nome_cargo_tratado = nomeCargoExibicao;
 
         const badgeClasse = situacaoTratada === 'Ativo' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary';
+
+        // CONSTRUÇÃO DINÂMICA DAS AÇÕES BASEADA NAS PERMISSÕES DO BANCO
+        let acoesHtml = '';
+        if (!permissoesTelaColaboradores.alterar && !permissoesTelaColaboradores.excluir) {
+            acoesHtml = `<span class="badge bg-secondary">Sem permissão</span>`;
+        } else {
+            if (permissoesTelaColaboradores.alterar) {
+                acoesHtml += `
+                    <button class="btn btn-sm btn-outline-primary me-1 border-0"                     
+                            onclick="window.prepararEdicaoPorId('${colaboradorId}')" 
+                            title="Editar colaborador">
+                        <i class="bi bi-pencil"></i>
+                    </button>`;
+            }
+            if (permissoesTelaColaboradores.excluir) {
+                acoesHtml += `
+                    <button class="btn btn-sm btn-outline-danger border-0" 
+                            onclick="deletarItemGeral('colaboradores', '${colaboradorId}')" 
+                            title="Excluir colaborador">
+                        <i class="bi bi-trash"></i>
+                    </button>`;
+            }
+        }
 
         return `
             <tr class="align-middle">                
@@ -1454,16 +1877,7 @@ function renderizarTabelaColaboradores(colaboradores) {
                 <td>${c.email || "-"}</td>
                 <td><span class="badge ${badgeClasse}">${situacaoTratada}</span></td>
                 <td class="text-end">
-                    <button class="btn btn-sm btn-outline-primary me-1 border-0"                     
-                            onclick="window.prepararEdicaoPorId('${colaboradorId}')" 
-                            title="Editar colaborador">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger border-0" 
-                            onclick="deletarItemGeral('colaboradores', '${colaboradorId}')" 
-                            title="Excluir colaborador">
-                        <i class="bi bi-trash"></i>
-                    </button>
+                    ${acoesHtml}
                 </td>
             </tr>
         `;
@@ -1486,22 +1900,28 @@ function atualizarControlesPaginacaoColaboradores(totalPaginas) {
 document.getElementById('formColaboradores')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    // 1. CAPTURA O ID DO COLABORADOR (SE EXISTIR, SIGNIFICA QUE É EDIÇÃO)
     const campoId = document.getElementById('colab-id');
     const id = campoId ? campoId.value.trim() : "";
+
+    // VALIDAÇÕES DE SEGURANÇA NO FRONT-END
+    if (!id && !permissoesTelaColaboradores.inserir) {
+        alert("Seu perfil não possui permissão para inserir novos colaboradores.");
+        return;
+    }
+    if (id && !permissoesTelaColaboradores.alterar) {
+        alert("Seu perfil não possui permissão para alterar colaboradores existentes.");
+        return;
+    }
     
-    // DEFINIÇÃO CENTRALIZADA DA URL E DO MÉTODO HTTP
     let url = id ? `${API_URL}/colaboradores/${id}` : `${API_URL}/colaboradores/`;
     let metodo = id ? 'PUT' : 'POST';
 
     try {
-        // 2. CAPTURA E VALIDAÇÃO DO CARGO
         const selectCargo = document.getElementById('colaboradores-cargo') || document.querySelector('select[id*="cargo"]');
         const valorCargo = selectCargo ? selectCargo.value : "";
         const idCargoInt = parseInt(valorCargo, 10);
 
         if (isNaN(idCargoInt)) {
-            console.error("Valor capturado no select do cargo:", valorCargo);
             if (typeof dispararNotificacao === "function") {
                 dispararNotificacao("Selecione um cargo válido para o colaborador.", "erro");
             } else {
@@ -1510,15 +1930,12 @@ document.getElementById('formColaboradores')?.addEventListener('submit', async (
             return; 
         }
 
-        // 3. CAPTURA E CONVERSÃO DA SITUAÇÃO (ATIVO/INATIVO)
         const selectSituacao = document.getElementById('colaboradores-situacao');
         const valorSituacaoTela = selectSituacao ? selectSituacao.value.toString().trim() : "true";
         const ehAtivoBoolean = (valorSituacaoTela === "true");
 
-        // 4. CAPTURA DO SETOR (PREDEFINIDO VIA CÓDIGO NO FRONTEND)
         const setorInput = document.getElementById('colaboradores-setor')?.value || "Não Informado";
 
-        // 5. MONTAGEM DO PAYLOAD COMPATÍVEL COM O BANCO DE DADOS
         const payloadJSON = {
             nome: document.getElementById('colaboradores-nome')?.value || "",
             matricula: parseInt(document.getElementById('colaboradores-matricula')?.value, 10) || 0,
@@ -1528,14 +1945,13 @@ document.getElementById('formColaboradores')?.addEventListener('submit', async (
             setor: setorInput
         };
 
-        // Log de inspeção para debug no painel F12
-        console.log(`[Envio API] Método: ${metodo} | URL: ${url} | Payload:`, payloadJSON);
+        const perfilId = typeof PERFIL_USUARIO !== 'undefined' ? PERFIL_USUARIO : obterIdPerfilUsuario();
 
-        // 6. DISPARO DA REQUISIÇÃO HTTP CONTRA A API
         const res = await fetch(url, {
             method: metodo,
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
             },
             body: JSON.stringify(payloadJSON)
         });
@@ -1552,15 +1968,12 @@ document.getElementById('formColaboradores')?.addEventListener('submit', async (
                 alert(mensagemAlert);
             }
             
-            // Reseta todos os campos padrão do formulário (Trata ambos os formatos de IDs comuns)
             const formulario = document.getElementById('formColaboradores') || document.getElementById('form-colaboradores');
             if (formulario) formulario.reset();
             
-            // Limpezas e resets manuais obrigatórios pós-salvamento
             if (selectSituacao) selectSituacao.value = "true";
             if (campoId) campoId.value = ""; 
             
-            // Restaura o título do formulário e reverte o botão para o modo de criação original
             const tituloForm = document.getElementById('titulo-form-colab');
             if (tituloForm) {
                 tituloForm.innerHTML = '<i class="bi bi-person-plus text-primary me-2"></i>Novo Colaborador';
@@ -1573,14 +1986,11 @@ document.getElementById('formColaboradores')?.addEventListener('submit', async (
                 btnSalvar.classList.add('btn-primary');
             }
 
-            // Atualiza a tabela dinamicamente em tempo real na tela
             if (typeof listarColaboradoresCRUD === "function") {
                 listarColaboradoresCRUD();
             }
         } else {
             const erroApi = await res.json().catch(() => ({}));
-            console.error("Detalhes do erro do servidor:", erroApi);
-            
             if (typeof dispararNotificacao === "function") {
                 dispararNotificacao(`Não foi possível salvar os dados do colaborador. Erro ${res.status}`, "erro");
             } else {
@@ -1601,13 +2011,17 @@ document.getElementById('formColaboradores')?.addEventListener('submit', async (
 // 4. FUNÇÕES DE AUXÍLIO PARA EDIÇÃO (UPDATE)
 // =========================================================================
 window.prepararEdicaoPorId = function(id) {
+    if (!permissoesTelaColaboradores.alterar) {
+        alert("Seu perfil não possui permissão para alterar colaboradores.");
+        return;
+    }
+
     const c = todosColaboradores.find(colab => {
         const idColab = colab.id_colaboradores ?? colab.id ?? colab._id;
         return idColab?.toString().trim() === id.toString().trim();
     });
     
     if (!c) {
-        console.error("Colaborador não encontrado na memória local.");
         if (typeof dispararNotificacao === "function") {
             dispararNotificacao("Erro ao carregar dados do colaborador para edição.", "erro");
         }
@@ -1620,7 +2034,7 @@ window.prepararEdicaoPorId = function(id) {
     const campoCargo = document.getElementById('colaboradores-cargo');
     const campoEmail = document.getElementById('colaboradores-email');
     const campoSituacao = document.getElementById('colaboradores-situacao');
-    const campoSetor = document.getElementById('colaboradores-setor'); // Captura o elemento na tela
+    const campoSetor = document.getElementById('colaboradores-setor');
     
     const idLimpo = (c.id_colaboradores ?? c.id ?? c._id ?? "").toString().trim();
     
@@ -1629,53 +2043,41 @@ window.prepararEdicaoPorId = function(id) {
     if (campoMatricula) campoMatricula.value = c.matricula || "";
     if (campoEmail) campoEmail.value = c.email || "";
 
-    // 1. CARREGA O CARGO ATUAL NO SELECT DE CARGOS
     if (campoCargo) {
         campoCargo.value = c.id_cargos ?? c.id_cargo ?? "";
     }
 
-    // 2. ATUALIZAÇÃO DO SELECT DE SETOR NA EDIÇÃO (Mapeia chaves alternativas para segurança)
     if (campoSetor) {
-        // Tenta buscar 'setor', 'setor_tratado' ou 'area_setor' vindo do objeto de memória local
         const setorBanco = c.setor ?? c.setor_tratado ?? c.area_setor ?? "Não Informado";
         campoSetor.value = setorBanco; 
     }
 
-    // 3. ALTERA O TEXTO DO BOTÃO PARA MODO EDIÇÃO (Tenta tanto com hífen quanto sem hífen no seletor)
     const btnSalvar = document.querySelector('#form-colaboradores button[type="submit"]') || document.querySelector('#formColaboradores button[type="submit"]');
     if (btnSalvar) {
         btnSalvar.innerHTML = '<i class="fas fa-save me-2"></i> Salvar Alterações';
         btnSalvar.classList.remove('btn-primary');
-        btnSalvar.classList.add('btn-warning'); // Muda a cor para destacar a edição
+        btnSalvar.classList.add('btn-warning');
     }
 
-    // Rola a página suavemente até o formulário para facilitar para o usuário
     const formulario = document.getElementById('form-colaboradores') || document.getElementById('formColaboradores');
     if (formulario) {
         formulario.scrollIntoView({ behavior: 'smooth' });
     }
-    
-    // =========================================================================
-    // INJEÇÃO DO CARGO COMPATÍVEL COM O COMPONENTE DATALIST
-    // =========================================================================
+
     if (campoCargo) {
-        // Alimenta o campo oculto (o ID que vai salvar no banco)
         const idCargoParaInserir = c.id_cargo_tratado || c.id_cargos || c.id_cargo || "";
         campoCargo.value = idCargoParaInserir;
         
-        // Dispara a função reversa do datalist para achar o Nome pelo ID e preencher o input visível
         if (typeof window.atualizarInputVisualCargo === 'function') {
             window.atualizarInputVisualCargo(idCargoParaInserir);
         } else {
-            // Fallback caso a lista de cargos demore a carregar, tenta usar o nome salvo na linha
             const inputBusca = document.getElementById('colaboradores-cargo-busca');
             if (inputBusca && c.nome_cargo_tratado) {
                 inputBusca.value = c.nome_cargo_tratado;
             }
         }
     }
-    
-    // 4. ATUALIZAÇÃO DA SITUAÇÃO COM TIMEOUT PARA GARANTIR EVENTO CHANGE
+
     if (campoSituacao) {
         const statusAtivo = c.ativo === true || 
                             c.ativo === "true" || 
@@ -1691,8 +2093,7 @@ window.prepararEdicaoPorId = function(id) {
             campoSituacao.dispatchEvent(new Event('change', { bubbles: true }));
         }, 50);
     }
-    
-    // 5. ATUALIZA O TÍTULO VISUAL DO FORMULÁRIO
+
     const tituloForm = document.getElementById('titulo-form-colab');
     if (tituloForm) {
         tituloForm.innerHTML = '<i class="bi bi-pencil-square text-warning me-2"></i>Editar Colaborador';
@@ -1702,16 +2103,55 @@ window.prepararEdicaoPorId = function(id) {
 };
 
 // =========================================================================
-// 5. EXCLUIR COLABORADORES
+// 5. OUVINTES DE EVENTOS DA PÁGINA (DENTRO DO DOMCONTENTLOADED)
+// =========================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('tabela-colaboradores')) {
+        inicializarTelaColaboradores();
+    }
+
+    document.getElementById('pesquisa-colaborador')?.addEventListener('input', () => {
+        paginaAtualColaboradores = 1; 
+        filtrarEAtualizarTabelaColaboradores();
+    });
+
+    document.getElementById('btn-anterior-colaboradores')?.addEventListener('click', () => {
+        if (paginaAtualColaboradores > 1) {
+            paginaAtualColaboradores--;
+            filtrarEAtualizarTabelaColaboradores();
+        }
+    });
+
+    document.getElementById('btn-proximo-colaboradores')?.addEventListener('click', () => {
+        const totalPaginas = Math.ceil(colaboradoresFiltrados.length / ITENS_POR_PAGINA) || 1;
+        if (paginaAtualColaboradores < totalPaginas) {
+            paginaAtualColaboradores++;
+            filtrarEAtualizarTabelaColaboradores();
+        }
+    });
+});
+
+// =========================================================================
+// 6. EXCLUIR COLABORADORES
 // =========================================================================
 window.deletarItemGeral = async function(endpoint, id) {
+    if (!permissoesTelaColaboradores.excluir) {
+        alert("Seu perfil não possui permissão para excluir colaboradores.");
+        return;
+    }
+
     if (!confirm("Tem certeza que deseja excluir este registro? Esta ação não pode ser desfeita.")) {
         return;
     }
 
     try {
+        const perfilId = typeof PERFIL_USUARIO !== 'undefined' ? PERFIL_USUARIO : obterIdPerfilUsuario();
+
         const res = await fetch(`${API_URL}/${endpoint}/${id}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'x-perfil-id': perfilId ? perfilId.toString() : ""
+            }
         });
 
         if (res.ok) {
@@ -1725,7 +2165,6 @@ window.deletarItemGeral = async function(endpoint, id) {
                 listarColaboradoresCRUD();
             }
         } else {
-            console.error("Erro na exclusão. Status:", res.status);
             if (typeof dispararNotificacao === "function") {
                 dispararNotificacao(`Não foi possível excluir o registro. Status: ${res.status}`, "erro");
             } else {
