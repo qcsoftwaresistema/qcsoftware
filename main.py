@@ -33,10 +33,7 @@ def normalizar_texto(texto: str) -> str:
 # FUNÇÃO DE VALIDAÇÃO DE PERMISSÕES (CORRIGIDA DEFINITIVA)
 # ==========================================
 def verificar_permissao_tela(tela_nome: str, acao: str):
-    def dependency(
-        x_perfil_id: Optional[int] = Header(default=None, alias="x-perfil-id") 
-        db: Session = Depends(get_db)
-    ):
+    def dependency(x_perfil_id: int = Header(default=None), db: Session = Depends(get_db)):
         if not x_perfil_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, 
