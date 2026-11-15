@@ -132,68 +132,65 @@
         </div>
     </div> 
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-
-            <div class="card-bg p-4 md:p-5 rounded-xl flex flex-col items-center justify-between min-h-[250px]">
-                <h3 class="font-bold text-sm md:text-base text-gray-100 self-start mb-2">Status Ocorrências</h3>
-                <div class="w-full max-w-[180px] flex justify-center items-center my-auto">
-                    <canvas id="graficoPizza"></canvas>
-                </div>
-            </div>
-
-            <div class="card-bg p-4 md:p-5 rounded-xl flex flex-col justify-between min-h-[250px]">
-                <div class="flex justify-between items-center mb-2">
-                    <h3 class="text-sm md:text-base font-bold text-gray-100">Ocorrências por Setor</h3>
-                </div>
-                <div class="relative w-full h-48">
-                    <canvas id="chartSetores"></canvas>
-                </div>
-            </div>
-
-            <div class="card-bg p-4 md:p-5 rounded-xl flex flex-col justify-between min-h-[250px]">
-                <h3 class="font-bold text-sm md:text-base text-gray-100 mb-2">Ocorrências por Dia</h3>
-                <div class="relative w-full h-48">
-                    <canvas id="graficoBarras"></canvas>
-                </div>
-            </div>
-
-            <div class="bg-[#140b33]/60 p-4 md:p-5 rounded-xl border border-[#1f1445]/50 flex flex-col justify-between min-h-[250px]">
-                <h3 class="text-gray-200 font-bold text-sm md:text-base mb-2">Ocorrências por Mês</h3>
-                <div class="relative w-full h-48">
-                    <canvas id="graficoMes"></canvas>
-                </div>
-            </div>
-
-        </div>
-
-        <div class="card-bg p-4 md:p-5 rounded-xl w-full">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="font-bold text-base md:text-lg text-gray-100">Últimas Ocorrências Registradas</h3>
-                <a href="/telas/ocorrencias_listagem.html" class="text-xs md:text-sm font-semibold text-accent hover:underline" target="_blank" rel="noopener noreferrer">Ver Todas</a>
-            </div>
-            
-            <div class="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-                <table class="w-full text-left text-xs md:text-sm border-collapse min-w-[600px]">
-                    <thead>
-                        <tr class="text-accent border-b border-[#1f1445] text-xs md:text-base font-bold">
-                            <th class="pb-3 pl-2">Data/Hora</th>
-                            <th class="pb-3">Produto</th>
-                            <th class="pb-3">Lote Produto</th>
-                            <th class="pb-3">Máquina</th>
-                            <th class="pb-3 text-center">Situação</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabelaOcorrencias" class="font-medium">
-                        <tr>
-                            <td colspan="5" class="py-6 text-gray-400 text-center">Carregando ocorrências...</td>
-                        </tr>
-                    </tbody>
-                </table>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
+        <div class="card-bg p-4 md:p-5 rounded-xl flex flex-col items-center justify-between min-h-[250px]">
+            <h3 class="font-bold text-sm md:text-base text-gray-100 self-start mb-2">Status Ocorrências</h3>
+            <div class="w-full max-w-[180px] flex justify-center items-center my-auto">
+                <canvas id="graficoPizza"></canvas>
             </div>
         </div>
 
-        <div class="flex flex-col gap-8 w-full">
+        <div class="card-bg p-4 md:p-5 rounded-xl flex flex-col justify-between min-h-[250px]">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-sm md:text-base font-bold text-gray-100">Ocorrências por Setor</h3>
+            </div>
+            <div class="relative w-full h-48">
+                <canvas id="chartSetores"></canvas>
+            </div>
+        </div>
 
+        <div class="card-bg p-4 md:p-5 rounded-xl flex flex-col justify-between min-h-[250px]">
+            <h3 class="font-bold text-sm md:text-base text-gray-100 mb-2">Ocorrências por Dia</h3>
+            <div class="relative w-full h-48">
+                <canvas id="graficoBarras"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-[#140b33]/60 p-4 md:p-5 rounded-xl border border-[#1f1445]/50 flex flex-col justify-between min-h-[250px]">
+            <h3 class="text-gray-200 font-bold text-sm md:text-base mb-2">Ocorrências por Mês</h3>
+            <div class="relative w-full h-48">
+                <canvas id="graficoMes"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-bg p-4 md:p-5 rounded-xl w-full mb-8">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-base md:text-lg text-gray-100">Últimas Ocorrências Registradas</h3>
+            <a href="/telas/ocorrencias_listagem.html" class="text-xs md:text-sm font-semibold text-accent hover:underline" target="_blank" rel="noopener noreferrer">Ver Todas</a>
+        </div>
+        
+        <div class="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+            <table class="w-full text-left text-xs md:text-sm border-collapse min-w-[600px]">
+                <thead>
+                    <tr class="text-accent border-b border-[#1f1445] text-xs md:text-base font-bold">
+                        <th class="pb-3 pl-2">Data/Hora</th>
+                        <th class="pb-3">Produto</th>
+                        <th class="pb-3">Lote Produto</th>
+                        <th class="pb-3">Máquina</th>
+                        <th class="pb-3 text-center">Situação</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaOcorrencias" class="font-medium">
+                    <tr>
+                        <td colspan="5" class="py-6 text-gray-400 text-center">Carregando ocorrências...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="flex flex-col gap-8 w-full">
         <div>
             <h2 class="text-xl md:text-2xl font-bold mb-4 text-gray-100 flex items-center gap-2">
                 <i class="fa-solid fa-layer-group text-accent"></i> Mapa das Máquinas 
@@ -252,13 +249,15 @@
                 </div>
             </div>
         </div>
-
     </div>
 
 <script>
     // Configuração dos servidores por contexto
     const SERVIDOR_SISTEMA = "https://sistema.qcsoftware.com.br";
     const URL_MAPAMAQUINAS_API = "https://mapamaquinas.qcsoftware.com.br/api/dashboard/status";
+    const URL_MAPAMAQUINAS_LOGIN = "https://mapamaquinas.qcsoftware.com.br/api/login";
+    const MAPAMAQUINAS_USER = "qcsoftware";
+    const MAPAMAQUINAS_PASS = "Qcsoftware@2026";
 
     Chart.defaults.color = '#e5e7eb';
     Chart.defaults.borderColor = 'rgba(31, 20, 69, 0.4)';
@@ -277,6 +276,9 @@
     let mapaSetorPorMatriculaColab = {};
 
     document.addEventListener("DOMContentLoaded", async () => {
+        const permitido = await verificarAcessoDashboard();
+        if (!permitido) return;
+
         // 1. Carrega catálogos do servidor do sistema
         await carregarCatalogosAuxiliares();
 
@@ -289,8 +291,10 @@
         // 3. Loop de atualização a cada 1 minuto (60.000 ms)
         setInterval(async () => {
             try {
-                await buscarDadosAPI();
-                await buscarEAtualizarDashboard();
+                await Promise.allSettled([
+                    buscarDadosAPI(),
+                    buscarEAtualizarDashboard()
+                ]);
                 console.log('Dashboard atualizada com sucesso!');
             } catch (error) {
                 console.error('Erro ao atualizar a dashboard:', error);
@@ -298,10 +302,33 @@
         }, 60000); 
     });
 
+    // OBTÉM OU RENOVA TOKEN DA API MAPA DAS MÁQUINAS
+    async function obterTokenMapaMaquinas(forcarNovo = false) {
+        let token = sessionStorage.getItem("qc_mapa_token");
+        if (token && !forcarNovo) return token;
+
+        const resLogin = await fetch(URL_MAPAMAQUINAS_LOGIN, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                username: MAPAMAQUINAS_USER,
+                senha: MAPAMAQUINAS_PASS
+            })
+        });
+
+        if (!resLogin.ok) {
+            throw new Error(`Falha ao autenticar no Mapa das Máquinas: ${resLogin.status}`);
+        }
+
+        const authData = await resLogin.json();
+        token = authData.token;
+        sessionStorage.setItem("qc_mapa_token", token);
+        return token;
+    }
+
     // CARREGA OS CATÁLOGOS AUXILIARES (Sistema)
     async function carregarCatalogosAuxiliares() {
         try {
-            // Produtos (exige / no final)
             const resProd = await fetch(`${SERVIDOR_SISTEMA}/produtos/`);
             if (resProd.ok) {
                 const produtosLista = await resProd.json();
@@ -311,7 +338,6 @@
                 });
             }
             
-            // Máquinas (exige / no final)
             const resMaq = await fetch(`${SERVIDOR_SISTEMA}/maquinas/`);
             if (resMaq.ok) {
                 const maquinasLista = await resMaq.json();
@@ -321,7 +347,6 @@
                 });
             }
 
-            // Colaboradores (exige / no final)
             const resColab = await fetch(`${SERVIDOR_SISTEMA}/colaboradores/`);
             if (resColab.ok) {
                 const colaboradoresLista = await resColab.json();
@@ -365,36 +390,45 @@
         }
     }
 
-    // BUSCA MAPA DAS MÁQUINAS (Tempo Real)
+    // BUSCA MAPA DAS MÁQUINAS (Tempo Real com Token Bearer)
     async function buscarEAtualizarDashboard() {
-        let dados = null;
-
         try {
-            // Chamada sem barra no final para bater exatamente no endpoint da imagem
-            const resposta = await fetch(URL_MAPAMAQUINAS_API, {
-                headers: { 'Accept': 'application/json' }
+            let token = await obterTokenMapaMaquinas(false);
+
+            let resposta = await fetch(URL_MAPAMAQUINAS_API, {
+                headers: {
+                    "Accept": "application/json",
+                    "Authorization": `Bearer ${token}`
+                }
             });
 
-            if (!resposta.ok) throw new Error(`Erro na API de Máquinas: ${resposta.status}`);
+            if (resposta.status === 401) {
+                token = await obterTokenMapaMaquinas(true);
+                resposta = await fetch(URL_MAPAMAQUINAS_API, {
+                    headers: {
+                        "Accept": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    }
+                });
+            }
 
-            dados = await resposta.json();
+            if (!resposta.ok) {
+                throw new Error(`Erro na API de Máquinas: ${resposta.status}`);
+            }
+
+            const dados = await resposta.json();
             dadosMapaMaquinas = dados;
 
-            // Mapeamento explícito das chaves recebidas {"total", "normal", "parado", "manutencao"}
             if (typeof renderizarMapaMaquinas === "function") {
                 renderizarMapaMaquinas(dados);
             } else if (typeof atualizarMapaMaquinas === "function") {
                 atualizarMapaMaquinas(dados);
             }
-        } catch (error) {
-            console.error("Falha ao atualizar o Mapa das Máquinas:", error);
-        }
 
-        try {
-            if(document.getElementById("card-total")) document.getElementById("card-total").innerText = dados.total ?? 0;
-            if(document.getElementById("card-normal")) document.getElementById("card-normal").innerText = dados.normal ?? 0;
-            if(document.getElementById("card-parada")) document.getElementById("card-parada").innerText = dados.parado ?? 0;
-            if(document.getElementById("card-manutencao")) document.getElementById("card-manutencao").innerText = dados.manutencao ?? 0;
+            if (document.getElementById("card-total")) document.getElementById("card-total").innerText = dados.total ?? 0;
+            if (document.getElementById("card-normal")) document.getElementById("card-normal").innerText = dados.normal ?? 0;
+            if (document.getElementById("card-parada")) document.getElementById("card-parada").innerText = dados.parado ?? 0;
+            if (document.getElementById("card-manutencao")) document.getElementById("card-manutencao").innerText = dados.manutencao ?? 0;
 
             const canvasStatus = document.getElementById("graficoStatus");
             if (!canvasStatus) return;
@@ -425,7 +459,7 @@
                 }
             });
         } catch (error) {
-            console.error("Erro ao renderizar gráfico do painel:", error);
+            console.error("Falha ao atualizar o Mapa das Máquinas:", error);
         }
     }
 
@@ -516,7 +550,6 @@
             tabelaCorpo.innerHTML = linhasHTML;
         }
 
-        // RENDERIZA OS GRÁFICOS
         if (typeof renderizarGraficoPizza === "function") renderizarGraficoPizza(pendentes, emAndamento, concluidas);
         if (typeof renderizarGraficoBarras === "function") renderizarGraficoBarras(dados);
         if (typeof renderizarGraficoMes === "function") renderizarGraficoMes(dados);
@@ -532,159 +565,130 @@
         return s;
     }
 
-    // GRÁFICO DE SETORES COM A BUSCA DEFINITIVA DE SETOR
-function renderizarGraficoSetores(ocorrencias) {
-    try {
-        const ctx = document.getElementById('chartSetores');
-        if (!ctx) return;
+    function renderizarGraficoSetores(ocorrencias) {
+        try {
+            const ctx = document.getElementById('chartSetores');
+            if (!ctx) return;
 
-        if (!ocorrencias || !Array.isArray(ocorrencias)) {
-            console.warn("Nenhuma ocorrência válida recebida para o gráfico de setores.");
-            return;
-        }
+            if (!ocorrencias || !Array.isArray(ocorrencias)) return;
 
-        // Garante que os mapas existem mesmo se ainda não foram populados
-        const mapaId = typeof mapaSetorPorIdColab !== "undefined" ? mapaSetorPorIdColab : {};
-        const mapaMatricula = typeof mapaSetorPorMatriculaColab !== "undefined" ? mapaSetorPorMatriculaColab : {};
+            const mapaId = typeof mapaSetorPorIdColab !== "undefined" ? mapaSetorPorIdColab : {};
+            const mapaMatricula = typeof mapaSetorPorMatriculaColab !== "undefined" ? mapaSetorPorMatriculaColab : {};
 
-        const contagemSetores = {};
+            const contagemSetores = {};
 
-        ocorrencias.forEach((o, index) => {
-            if (!o) return;
+            ocorrencias.forEach((o) => {
+                if (!o) return;
 
-            let setorEncontrado = null;
+                let setorEncontrado = null;
 
-            // 1. Tenta capturar o colaborador de qualquer estrutura possível (raiz ou objeto aninhado)
-            const idColab = o.id_colaboradores ?? o.id_colaborador ?? o.idColaborador ?? o.colaborador_id ?? o.usuario_id ?? o.id 
-                ?? (o.colaborador && (o.colaborador.id_colaboradores ?? o.colaborador.id_colaborador ?? o.colaborador.idColaborador ?? o.colaborador.id));
-            
-            const matColab = o.matricula ?? o.matricula_colaborador 
-                ?? (o.colaborador && (o.colaborador.matricula ?? o.colaborador.matricula_colaborador));
-            
-            const nomeColab = o.nome ?? o.nome_colaborador ?? o.nomeColaborador 
-                ?? (o.colaborador && (o.colaborador.nome ?? o.colaborador.nome_colaborador));
-            
-            const emailColab = o.email ?? o.email_colaborador 
-                ?? (o.colaborador && o.colaborador.email);
+                const idColab = o.id_colaboradores ?? o.id_colaborador ?? o.idColaborador ?? o.colaborador_id ?? o.usuario_id ?? o.id 
+                    ?? (o.colaborador && (o.colaborador.id_colaboradores ?? o.colaborador.id_colaborador ?? o.colaborador.idColaborador ?? o.colaborador.id));
+                
+                const matColab = o.matricula ?? o.matricula_colaborador 
+                    ?? (o.colaborador && (o.colaborador.matricula ?? o.colaborador.matricula_colaborador));
+                
+                const nomeColab = o.nome ?? o.nome_colaborador ?? o.nomeColaborador 
+                    ?? (o.colaborador && (o.colaborador.nome ?? o.colaborador.nome_colaborador));
+                
+                const emailColab = o.email ?? o.email_colaborador 
+                    ?? (o.colaborador && o.colaborador.email);
 
-            // 2. Tenta pegar o setor diretamente do objeto colaborador se ele já vier preenchido
-            if (o.colaborador && typeof o.colaborador === 'object' && o.colaborador.setor) {
-                const setorAninhado = String(o.colaborador.setor).trim();
-                if (setorAninhado && setorAninhado !== "Não Informado" && setorAninhado !== "null" && setorAninhado !== "undefined") {
-                    setorEncontrado = setorAninhado;
+                if (o.colaborador && typeof o.colaborador === 'object' && o.colaborador.setor) {
+                    const setorAninhado = String(o.colaborador.setor).trim();
+                    if (setorAninhado && setorAninhado !== "Não Informado" && setorAninhado !== "null" && setorAninhado !== "undefined") {
+                        setorEncontrado = setorAninhado;
+                    }
                 }
-            }
 
-            // 3. Tenta pegar o setor direto da raiz da ocorrência se existir
-            if (!setorEncontrado && o.setor) {
-                const setorRaiz = String(o.setor).trim();
-                if (setorRaiz && setorRaiz !== "Não Informado" && setorRaiz !== "null" && setorRaiz !== "undefined") {
-                    setorEncontrado = setorRaiz;
+                if (!setorEncontrado && o.setor) {
+                    const setorRaiz = String(o.setor).trim();
+                    if (setorRaiz && setorRaiz !== "Não Informado" && setorRaiz !== "null" && setorRaiz !== "undefined") {
+                        setorEncontrado = setorRaiz;
+                    }
                 }
-            }
 
-            // 4. Busca cruzada nos Mapas Auxiliares (ID -> Matrícula -> Nome -> E-mail)
-            if (!setorEncontrado && idColab !== undefined && idColab !== null) {
-                const chaveId = String(idColab).trim();
-                if (mapaId[chaveId]) {
-                    setorEncontrado = mapaId[chaveId];
+                if (!setorEncontrado && idColab !== undefined && idColab !== null) {
+                    const chaveId = String(idColab).trim();
+                    if (mapaId[chaveId]) setorEncontrado = mapaId[chaveId];
                 }
-            }
 
-            if (!setorEncontrado && matColab !== undefined && matColab !== null) {
-                const chaveMat = String(matColab).trim();
-                if (mapaMatricula[chaveMat]) {
-                    setorEncontrado = mapaMatricula[chaveMat];
+                if (!setorEncontrado && matColab !== undefined && matColab !== null) {
+                    const chaveMat = String(matColab).trim();
+                    if (mapaMatricula[chaveMat]) setorEncontrado = mapaMatricula[chaveMat];
                 }
-            }
 
-            if (!setorEncontrado && nomeColab) {
-                const chaveNome = String(nomeColab).trim().toLowerCase();
-                if (mapaId[chaveNome]) {
-                    setorEncontrado = mapaId[chaveNome];
+                if (!setorEncontrado && nomeColab) {
+                    const chaveNome = String(nomeColab).trim().toLowerCase();
+                    if (mapaId[chaveNome]) setorEncontrado = mapaId[chaveNome];
                 }
-            }
 
-            if (!setorEncontrado && emailColab) {
-                const chaveEmail = String(emailColab).trim().toLowerCase();
-                if (mapaId[chaveEmail]) {
-                    setorEncontrado = mapaId[chaveEmail];
+                if (!setorEncontrado && emailColab) {
+                    const chaveEmail = String(emailColab).trim().toLowerCase();
+                    if (mapaId[chaveEmail]) setorEncontrado = mapaId[chaveEmail];
                 }
+
+                const setorFinal = (setorEncontrado && String(setorEncontrado).trim() !== "" && String(setorEncontrado).trim() !== "Não Informado") 
+                    ? String(setorEncontrado).trim() 
+                    : "Não Informado";
+
+                contagemSetores[setorFinal] = (contagemSetores[setorFinal] || 0) + 1;
+            });
+
+            const dadosOrdenados = Object.entries(contagemSetores)
+                .map(([setor, total]) => ({ setor, total }))
+                .sort((a, b) => b.total - a.total);
+
+            const labels = dadosOrdenados.map(d => d.setor);
+            const valores = dadosOrdenados.map(d => d.total);
+
+            if (typeof chartSetoresInstancia !== "undefined" && chartSetoresInstancia) {
+                chartSetoresInstancia.destroy();
             }
 
-            // 5. Validação do Setor Final
-            const setorFinal = (setorEncontrado && String(setorEncontrado).trim() !== "" && String(setorEncontrado).trim() !== "Não Informado") 
-                ? String(setorEncontrado).trim() 
-                : "Não Informado";
-
-            // Se cair em "Não Informado", exibe no log para facilidade de depuração
-            if (setorFinal === "Não Informado") {
-                console.warn(`[Ocorrência #${index}] Setor não identificado:`, { idColab, matColab, nomeColab, o });
-            }
-
-            contagemSetores[setorFinal] = (contagemSetores[setorFinal] || 0) + 1;
-        });
-
-        // Ordena os setores do maior para o menor total
-        const dadosOrdenados = Object.entries(contagemSetores)
-            .map(([setor, total]) => ({ setor, total }))
-            .sort((a, b) => b.total - a.total);
-
-        const labels = dadosOrdenados.map(d => d.setor);
-        const valores = dadosOrdenados.map(d => d.total);
-
-        // Destrói instância prévia do gráfico se existir
-        if (typeof chartSetoresInstancia !== "undefined" && chartSetoresInstancia) {
-            chartSetoresInstancia.destroy();
-        }
-
-        // Renderiza o gráfico Chart.js
-        chartSetoresInstancia = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Ocorrências',
-                    data: valores,
-                    backgroundColor: 'rgba(0, 240, 255, 0.75)',
-                    borderColor: '#00f0ff',
-                    borderWidth: 1.5,
-                    borderRadius: 4,
-                    barPercentage: 0.6
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => ` Ocorrências: ${context.raw}`
+            chartSetoresInstancia = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Ocorrências',
+                        data: valores,
+                        backgroundColor: 'rgba(0, 240, 255, 0.75)',
+                        borderColor: '#00f0ff',
+                        borderWidth: 1.5,
+                        borderRadius: 4,
+                        barPercentage: 0.6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => ` Ocorrências: ${context.raw}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#a0aec0', stepSize: 1 }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#ffffff', font: { size: 12, weight: 'bold' } }
                         }
                     }
-                },
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#a0aec0', stepSize: 1 }
-                    },
-                    y: {
-                        grid: { display: false },
-                        ticks: { color: '#ffffff', font: { size: 12, weight: 'bold' } }
-                    }
                 }
-            }
-        });
-
-        console.log("📊 Gráfico de setores atualizado:", contagemSetores);
-
-    } catch (error) {
-        console.error("Erro ao renderizar gráfico de setores:", error);
+            });
+        } catch (error) {
+            console.error("Erro ao renderizar gráfico de setores:", error);
+        }
     }
-}
 
     function renderizarGraficoPizza(pendentes, emAndamento, concluidas) {
         const canvas = document.getElementById('graficoPizza');
@@ -840,82 +844,67 @@ function renderizarGraficoSetores(ocorrencias) {
     }
 
     async function verificarAcessoDashboard() {
-    // 1. Resgata o ID do Perfil conectado de forma flexível
-    const perfilId = typeof PERFIL_USUARIO !== 'undefined' && PERFIL_USUARIO 
-        ? PERFIL_USUARIO 
-        : (typeof obterIdPerfilUsuario === 'function' ? obterIdPerfilUsuario() : null) 
-          || localStorage.getItem('id_perfis') 
-          || sessionStorage.getItem('id_perfis');
+        const perfilId = typeof PERFIL_USUARIO !== 'undefined' && PERFIL_USUARIO 
+            ? PERFIL_USUARIO 
+            : (typeof obterIdPerfilUsuario === 'function' ? obterIdPerfilUsuario() : null) 
+              || localStorage.getItem('id_perfis') 
+              || sessionStorage.getItem('id_perfis');
 
-    if (!perfilId) return true;
+        if (!perfilId) return true;
 
-    try {
-        const baseUrl = typeof SERVIDOR_SISTEMA !== 'undefined' ? SERVIDOR_SISTEMA : API_BASE;
+        try {
+            const baseUrl = typeof SERVIDOR_SISTEMA !== 'undefined' ? SERVIDOR_SISTEMA : API_BASE;
 
-        // 2. Busca simultaneamente as telas e as permissões
-        const [resTelas, resPerms] = await Promise.all([
-            fetch(`${baseUrl}/telas/`).catch(() => fetch(`${baseUrl}/tela/`)),
-            fetch(`${baseUrl}/permissoes/`).catch(() => fetch(`${baseUrl}/permissoes`))
-        ]);
+            const [resTelas, resPerms] = await Promise.all([
+                fetch(`${baseUrl}/telas/`).catch(() => fetch(`${baseUrl}/tela/`)),
+                fetch(`${baseUrl}/permissoes/`).catch(() => fetch(`${baseUrl}/permissoes`))
+            ]);
 
-        let idTelaDashboard = 56; // Fallback do ID
+            let idTelaDashboard = 56;
 
-        if (resTelas && resTelas.ok) {
-            const listaTelas = await resTelas.json();
-            const telaEncontrada = listaTelas.find(t => t.nome && t.nome.toLowerCase().includes("dashboard"));
-            if (telaEncontrada && (telaEncontrada.id_telas || telaEncontrada.id)) {
-                idTelaDashboard = Number(telaEncontrada.id_telas || telaEncontrada.id);
+            if (resTelas && resTelas.ok) {
+                const listaTelas = await resTelas.json();
+                const telaEncontrada = listaTelas.find(t => t.nome && t.nome.toLowerCase().includes("dashboard"));
+                if (telaEncontrada && (telaEncontrada.id_telas || telaEncontrada.id)) {
+                    idTelaDashboard = Number(telaEncontrada.id_telas || telaEncontrada.id);
+                }
             }
-        }
 
-        if (resPerms && resPerms.ok) {
-            const listaPermissoes = await resPerms.json();
+            if (resPerms && resPerms.ok) {
+                const listaPermissoes = await resPerms.json();
 
-            // Pega a alteração mais recente no banco
-            const listaOrdenada = Array.isArray(listaPermissoes)
-                ? [...listaPermissoes].sort((a, b) => (b.id_permissoes || 0) - (a.id_permissoes || 0))
-                : [];
+                const listaOrdenada = Array.isArray(listaPermissoes)
+                    ? [...listaPermissoes].sort((a, b) => (b.id_permissoes || 0) - (a.id_permissoes || 0))
+                    : [];
 
-            const permissaoEncontrada = listaOrdenada.find(p => 
-                Number(p.id_perfis) === Number(perfilId) && Number(p.id_telas || p.id_tela) === Number(idTelaDashboard)
-            );
+                const permissaoEncontrada = listaOrdenada.find(p => 
+                    Number(p.id_perfis) === Number(perfilId) && Number(p.id_telas || p.id_tela) === Number(idTelaDashboard)
+                );
 
-            const podeVisualizar = permissaoEncontrada ? Boolean(permissaoEncontrada.visualizar) : false;
+                const podeVisualizar = permissaoEncontrada ? Boolean(permissaoEncontrada.visualizar) : false;
 
-            if (!podeVisualizar) {
-                alert("Acesso Negado: Seu perfil não possui permissão para visualizar o Dashboard.");
+                if (!podeVisualizar) {
+                    alert("Acesso Negado: Seu perfil não possui permissão para visualizar o Dashboard.");
 
-                // Renderiza a tela de bloqueio estilizada no próprio body
-                document.body.innerHTML = `
-                    <div class="min-h-screen flex items-center justify-center p-4 bg-[#0a051b]">
-                        <div class="card-bg p-8 rounded-2xl max-w-lg w-full text-center border border-red-500/30 shadow-2xl">
-                            <div class="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-                                <i class="fa-solid fa-shield-halved text-3xl"></i>
+                    document.body.innerHTML = `
+                        <div class="min-h-screen flex items-center justify-center p-4 bg-[#0a051b]">
+                            <div class="card-bg p-8 rounded-2xl max-w-lg w-full text-center border border-red-500/30 shadow-2xl">
+                                <div class="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+                                    <i class="fa-solid fa-shield-halved text-3xl"></i>
+                                </div>
+                                <h2 class="text-2xl font-bold text-white mb-2">Acesso Restrito</h2>
+                                <p class="text-gray-400 text-sm mb-6">Seu perfil não possui permissão para acessar a tela de Dashboard.</p>
                             </div>
-                            <h2 class="text-2xl font-bold text-white mb-2">Acesso Restrito</h2>
-                            <p class="text-gray-400 text-sm mb-6">Seu perfil não possui permissão para acessar a tela de Dashboard.</p>
                         </div>
-                    </div>
-                `;
-                return false;
+                    `;
+                    return false;
+                }
             }
+        } catch (e) {
+            console.error("Erro ao validar acesso ao Dashboard:", e);
         }
-    } catch (e) {
-        console.error("Erro ao validar acesso ao Dashboard:", e);
+        return true;
     }
-    return true;
-}
-
-// 3. Executa a verificação assim que a DOM estiver pronta
-document.addEventListener('DOMContentLoaded', async () => {
-    const permitido = await verificarAcessoDashboard();
-    if (!permitido) return; // Cancela o carregamento dos gráficos se o acesso for negado
-
-    // Executa as funções padrão da página se tiver permissão
-    if (typeof carregarCatalogosAuxiliares === 'function') await carregarCatalogosAuxiliares();
-    if (typeof buscarDadosAPI === 'function') buscarDadosAPI();
-    if (typeof buscarEAtualizarDashboard === 'function') buscarEAtualizarDashboard();
-});
 </script>
 </body>
 </html>
