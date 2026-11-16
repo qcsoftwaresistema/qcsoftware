@@ -252,8 +252,9 @@
     </div>
 
 <script>
-// Configuração dos servidores por contexto
+    // Configuração dos servidores por contexto
     const SERVIDOR_SISTEMA = "https://sistema.qcsoftware.com.br";
+    const URL_CATALOGOS_DASHBOARD = `${SERVIDOR_SISTEMA}/api/dashboard/catalogos`;
     const URL_ASSISTENTE_IA = `${SERVIDOR_SISTEMA}/api/assistente-dashboard`;
     const URL_MAPAMAQUINAS_API = "https://mapamaquinas.qcsoftware.com.br/api/dashboard/status";
     const URL_MAPAMAQUINAS_LOGIN = "https://mapamaquinas.qcsoftware.com.br/api/login";
@@ -280,7 +281,7 @@
         const permitido = await verificarAcessoDashboard();
         if (!permitido) return;
 
-        // 1. Carrega catálogos do servidor do sistema
+        // 1. Carrega catálogos (produtos, máquinas e setores dos colaboradores)
         await carregarCatalogosAuxiliares();
 
         // 2. Executa as buscas iniciais em paralelo
@@ -327,82 +328,53 @@
         return token;
     }
 
-    // CARREGA OS CATÁLOGOS AUXILIARES (Sistema)
+    // CARREGA OS CATÁLOGOS AUXILIARES (Produtos, Máquinas e Setores dos Colaboradores)
     async function carregarCatalogosAuxiliares() {
         try {
-            // Busca qualquer token salvo no navegador (caso a rota /colaboradores/ exija login)
-            const token = localStorage.getItem("token")
-                || sessionStorage.getItem("token")
-                || localStorage.getItem("access_token")
-                || sessionStorage.getItem("access_token")
-                || localStorage.getItem("qc_token")
-                || sessionStorage.getItem("qc_token");
+            const res = await fetch(URL_CATALOGOS_DASHBOARD, {
+                headers: { "Accept": "application/json" }
+            });
 
-            const opcoesFetch = token
-                ? { headers: { "Accept": "application/json", "Authorization": `Bearer ${token}` } }
-                : { headers: { "Accept": "application/json" } };
+            if (!res.ok) {
+                console.warn("Rota /api/dashboard/catalogos retornou status:", res.status);
+                return;
+            }
 
-            const extrairLista = (json) => {
-                if (Array.isArray(json)) return json;
-                if (json && typeof json === "object") {
-                    return json.items || json.dados || json.data || json.colaboradores || json.resultados || [];
+            const dados = await res.json();
+
+            (dados.produtos || []).forEach(p => {
+                if (p.id_produtos !== undefined && p.id_produtos !== null) {
+                    mapaProdutosGeral[String(p.id_produtos).trim()] = p.nome;
                 }
-                return [];
-            };
+            });
 
-            const [resProd, resMaq, resColab] = await Promise.allSettled([
-                fetch(`${SERVIDOR_SISTEMA}/produtos/`, opcoesFetch),
-                fetch(`${SERVIDOR_SISTEMA}/maquinas/`, opcoesFetch),
-                fetch(`${SERVIDOR_SISTEMA}/colaboradores/`, opcoesFetch)
-            ]);
+            (dados.maquinas || []).forEach(m => {
+                if (m.id_maquinas !== undefined && m.id_maquinas !== null) {
+                    mapaMaquinasGeral[String(m.id_maquinas).trim()] = m.nome;
+                }
+            });
 
-            if (resProd.status === "fulfilled" && resProd.value.ok) {
-                const produtosLista = extrairLista(await resProd.value.json());
-                produtosLista.forEach(p => {
-                    const idKey = p.id_produtos ?? p.id;
-                    if (idKey !== undefined && idKey !== null) {
-                        mapaProdutosGeral[String(idKey).trim()] = p.nome;
-                    }
-                });
-            }
-
-            if (resMaq.status === "fulfilled" && resMaq.value.ok) {
-                const maquinasLista = extrairLista(await resMaq.value.json());
-                maquinasLista.forEach(m => {
-                    const idKey = m.id_maquinas ?? m.id;
-                    if (idKey !== undefined && idKey !== null) {
-                        mapaMaquinasGeral[String(idKey).trim()] = m.nome;
-                    }
-                });
-            }
-
-            if (resColab.status === "fulfilled" && resColab.value.ok) {
-                const colaboradoresLista = extrairLista(await resColab.value.json());
-                colaboradoresLista.forEach(c => {
-                    const setorBruto = c.setor;
-                    if (setorBruto !== undefined && setorBruto !== null) {
-                        const setorLimpo = String(setorBruto).trim();
-                        if (setorLimpo !== "" && setorLimpo.toLowerCase() !== "null" && setorLimpo !== "Não Informado") {
-                            const idColab = c.id_colaboradores ?? c.id_colaborador ?? c.id;
-                            if (idColab !== undefined && idColab !== null) {
-                                mapaSetorPorIdColab[String(idColab).trim()] = setorLimpo;
-                            }
-                            if (c.matricula !== undefined && c.matricula !== null) {
-                                mapaSetorPorMatriculaColab[String(c.matricula).trim()] = setorLimpo;
-                            }
-                            if (c.nome) {
-                                mapaSetorPorIdColab[String(c.nome).trim().toLowerCase()] = setorLimpo;
-                            }
+            (dados.colaboradores || []).forEach(c => {
+                const setorBruto = c.setor;
+                if (setorBruto !== undefined && setorBruto !== null) {
+                    const setorLimpo = String(setorBruto).trim();
+                    if (setorLimpo !== "" && setorLimpo.toLowerCase() !== "null" && setorLimpo !== "Não Informado") {
+                        if (c.id_colaboradores !== undefined && c.id_colaboradores !== null) {
+                            mapaSetorPorIdColab[String(c.id_colaboradores).trim()] = setorLimpo;
+                        }
+                        if (c.matricula !== undefined && c.matricula !== null) {
+                            mapaSetorPorMatriculaColab[String(c.matricula).trim()] = setorLimpo;
+                        }
+                        if (c.nome) {
+                            mapaSetorPorIdColab[String(c.nome).trim().toLowerCase()] = setorLimpo;
                         }
                     }
-                });
-
-                // Redesenha o gráfico assim que os setores forem carregados
-                if (Array.isArray(dadosGlobais) && dadosGlobais.length > 0) {
-                    renderizarGraficoSetores(dadosGlobais);
                 }
-            } else {
-                console.warn("Aviso: /colaboradores/ retornou erro ou bloqueio:", resColab);
+            });
+
+            // Redesenha o gráfico de setores imediatamente se as ocorrências já tiverem sido carregadas
+            if (Array.isArray(dadosGlobais) && dadosGlobais.length > 0) {
+                renderizarGraficoSetores(dadosGlobais);
             }
         } catch (error) {
             console.warn("Falha ao carregar catálogos auxiliares:", error);
@@ -606,7 +578,7 @@
         return s;
     }
 
-function renderizarGraficoSetores(ocorrencias) {
+    function renderizarGraficoSetores(ocorrencias) {
         try {
             const ctx = document.getElementById('chartSetores');
             if (!ctx || !Array.isArray(ocorrencias)) return;
@@ -617,7 +589,7 @@ function renderizarGraficoSetores(ocorrencias) {
                 if (!o) return;
                 let setorEncontrado = null;
 
-                // 1. Cruzamento principal pelo id_colaboradores (ex: 33) com a coluna 'setor' de colaboradores
+                // 1. Cruzamento principal pelo id_colaboradores com a coluna 'setor' de colaboradores
                 if (o.id_colaboradores !== undefined && o.id_colaboradores !== null) {
                     const chaveId = String(o.id_colaboradores).trim();
                     if (mapaSetorPorIdColab[chaveId]) {
@@ -625,7 +597,7 @@ function renderizarGraficoSetores(ocorrencias) {
                     }
                 }
 
-                // 2. Fallback pelo nome em falha_quem (ex: "Paulo Souza") caso o ID não esteja na lista
+                // 2. Fallback pelo nome em falha_quem caso o ID não esteja na lista
                 if (!setorEncontrado && o.falha_quem) {
                     const chaveNome = String(o.falha_quem).trim().toLowerCase();
                     if (mapaSetorPorIdColab[chaveNome]) {
@@ -1174,7 +1146,7 @@ function renderizarGraficoSetores(ocorrencias) {
     </div>
   </div>
 
-<!-- Perguntas rápidas clicáveis -->
+  <!-- Perguntas rápidas clicáveis -->
   <div class="qc-ai-suggestions">
     <button class="qc-chip" onclick="enviarSugestao('Quais máquinas estão paradas ou em manutenção?')">Máquinas paradas</button>
     <button class="qc-chip" onclick="enviarSugestao('Tempo médio de máquinas paradas e em manutenção')">Tempo médio parada</button>
@@ -1190,7 +1162,6 @@ function renderizarGraficoSetores(ocorrencias) {
 
 <script>
   (function () {
-    // Detecta automaticamente a URL base da API (funciona tanto local quanto em produção qcsoftware.tech)
     const API_URL = typeof URL_ASSISTENTE_IA !== "undefined"
       ? URL_ASSISTENTE_IA
       : `${SERVIDOR_SISTEMA}/api/assistente-dashboard`;
@@ -1310,106 +1281,6 @@ function renderizarGraficoSetores(ocorrencias) {
       enviarPergunta(texto);
     };
   })();
-
-// Localiza automaticamente o token JWT salvo pelo login no navegador
-    function obterOpcoesFetchSistema() {
-        let tokenEncontrado = null;
-
-        for (const storage of [localStorage, sessionStorage]) {
-            for (let i = 0; i < storage.length; i++) {
-                const chave = storage.key(i);
-                const valor = storage.getItem(chave);
-                if (valor && (valor.startsWith("eyJ") || ["token", "access_token", "jwt", "qc_token", "auth_token"].includes(chave.toLowerCase()))) {
-                    tokenEncontrado = valor.replace(/^"|"$/g, "").replace(/^Bearer\s+/i, "");
-                    break;
-                }
-            }
-            if (tokenEncontrado) break;
-        }
-
-        const headers = { "Accept": "application/json" };
-        if (tokenEncontrado) {
-            headers["Authorization"] = `Bearer ${tokenEncontrado}`;
-        }
-
-        return {
-            headers,
-            credentials: "include"
-        };
-    }
-
-   // CARREGA OS CATÁLOGOS AUXILIARES (Produtos, Máquinas e Setores dos Colaboradores)
-    async function carregarCatalogosAuxiliares() {
-        try {
-            const res = await fetch(`${SERVIDOR_SISTEMA}/api/dashboard/catalogos`);
-            if (!res.ok) {
-                console.warn("Rota /api/dashboard/catalogos retornou status:", res.status);
-                return;
-            }
-
-            const dados = await res.json();
-
-            (dados.produtos || []).forEach(p => {
-                if (p.id_produtos !== undefined && p.id_produtos !== null) {
-                    mapaProdutosGeral[String(p.id_produtos).trim()] = p.nome;
-                }
-            });
-
-            (dados.maquinas || []).forEach(m => {
-                if (m.id_maquinas !== undefined && m.id_maquinas !== null) {
-                    mapaMaquinasGeral[String(m.id_maquinas).trim()] = m.nome;
-                }
-            });
-
-            (dados.colaboradores || []).forEach(c => {
-                const setorBruto = c.setor;
-                if (setorBruto !== undefined && setorBruto !== null) {
-                    const setorLimpo = String(setorBruto).trim();
-                    if (setorLimpo !== "" && setorLimpo.toLowerCase() !== "null" && setorLimpo !== "Não Informado") {
-                        if (c.id_colaboradores !== undefined && c.id_colaboradores !== null) {
-                            mapaSetorPorIdColab[String(c.id_colaboradores).trim()] = setorLimpo;
-                        }
-                        if (c.matricula !== undefined && c.matricula !== null) {
-                            mapaSetorPorMatriculaColab[String(c.matricula).trim()] = setorLimpo;
-                        }
-                        if (c.nome) {
-                            mapaSetorPorIdColab[String(c.nome).trim().toLowerCase()] = setorLimpo;
-                        }
-                    }
-                }
-            });
-
-            // Redesenha o gráfico de setores imediatamente se as ocorrências já tiverem sido carregadas
-            if (Array.isArray(dadosGlobais) && dadosGlobais.length > 0) {
-                renderizarGraficoSetores(dadosGlobais);
-            }
-        } catch (error) {
-            console.warn("Falha ao carregar catálogos auxiliares:", error);
-        }
-    }
-
-    // BUSCA OCORRÊNCIAS (Sistema Local)
-    async function buscarDadosAPI() {
-        try {
-            const response = await fetch(`${SERVIDOR_SISTEMA}/ocorrencias/`, obterOpcoesFetchSistema());
-            if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-            
-            dadosGlobais = await response.json();
-            
-            if (typeof atualizarDashboard === "function") {
-                atualizarDashboard(dadosGlobais);
-            }
-        } catch (error) {
-            console.error("Falha ao carregar ocorrências:", error);
-            const elTabela = document.getElementById("tabelaOcorrencias");
-            if (elTabela) {
-                elTabela.innerHTML = `
-                    <tr><td colspan="5" class="py-6 text-red-400 text-center text-base font-bold">Erro ao carregar dados dos servidores.</td></tr>
-                `;
-            }
-        }
-    }
-
 </script>
 
 </body>
