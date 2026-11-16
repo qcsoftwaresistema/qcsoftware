@@ -252,8 +252,9 @@
     </div>
 
 <script>
-    // Configuração dos servidores por contexto
+// Configuração dos servidores por contexto
     const SERVIDOR_SISTEMA = "https://sistema.qcsoftware.com.br";
+    const URL_ASSISTENTE_IA = `${SERVIDOR_SISTEMA}/api/assistente-dashboard`;
     const URL_MAPAMAQUINAS_API = "https://mapamaquinas.qcsoftware.com.br/api/dashboard/status";
     const URL_MAPAMAQUINAS_LOGIN = "https://mapamaquinas.qcsoftware.com.br/api/login";
     const MAPAMAQUINAS_USER = "qcsoftware";
@@ -1190,9 +1191,9 @@ function renderizarGraficoSetores(ocorrencias) {
 <script>
   (function () {
     // Detecta automaticamente a URL base da API (funciona tanto local quanto em produção qcsoftware.tech)
-    const API_URL = window.location.origin.includes('5500')
-      ? 'http://127.0.0.1:8000/api/assistente-dashboard'
-      : '/api/assistente-dashboard';
+    const API_URL = typeof URL_ASSISTENTE_IA !== "undefined"
+      ? URL_ASSISTENTE_IA
+      : `${SERVIDOR_SISTEMA}/api/assistente-dashboard`;
 
     const fab = document.getElementById('qc-ai-fab');
     const chatWindow = document.getElementById('qc-ai-window');
@@ -1340,11 +1341,7 @@ function renderizarGraficoSetores(ocorrencias) {
    // CARREGA OS CATÁLOGOS AUXILIARES (Produtos, Máquinas e Setores dos Colaboradores)
     async function carregarCatalogosAuxiliares() {
         try {
-            const urlCatalogosLocal = window.location.origin.includes('5500')
-                ? 'http://127.0.0.1:8000/api/dashboard/catalogos'
-                : '/api/dashboard/catalogos';
-
-            const res = await fetch(urlCatalogosLocal);
+            const res = await fetch(`${SERVIDOR_SISTEMA}/api/dashboard/catalogos`);
             if (!res.ok) {
                 console.warn("Rota /api/dashboard/catalogos retornou status:", res.status);
                 return;
