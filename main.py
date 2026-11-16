@@ -1,13 +1,14 @@
 from datetime import datetime
 from multiprocessing import get_context
 import os
+import re
 from fastapi import APIRouter, BackgroundTasks, FastAPI, Depends, HTTPException, logger, status, Header
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, EmailStr
 import hashlib
 import hmac
 import secrets
-from sqlalchemy import func, or_
+from sqlalchemy import create_engine, func, or_, text
 from sqlalchemy.orm import Session
 from typing import List
 import models, schemas
@@ -19,8 +20,15 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-
+import time
 import unicodedata
+
+try:
+    genai = importlib.import_module("google.genai")
+    types = importlib.import_module("google.genai.types")
+except ImportError:
+    genai = None
+    types = None
 
 def normalizar_texto(texto: str) -> str:
     """Remove acentos, espaços extras e converte para minúsculas."""
@@ -121,7 +129,17 @@ except ImportError:
     def load_dotenv():
         return False
 
-load_dotenv()
+env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assistenteia.env")
+load_dotenv(dotenv_path=env_path)
+
+# Garante o carregamento do assistenteia.env mesmo sem python-dotenv instalado
+if os.path.exists(env_path):
+    with open(env_path, "r", encoding="utf-8") as f:
+        for linha in f:
+            linha = linha.strip()
+            if linha and not linha.startswith("#") and "=" in linha:
+                chave, valor = linha.split("=", 1)
+                os.environ[chave.strip()] = valor.strip().strip('"').strip("'")
 
 logger = logging.getLogger(__name__)
 
@@ -1056,3 +1074,555 @@ async def autenticar(dados: LoginSchema, db: Session = Depends(get_db)):
         "sucesso": True,
         "usuario": user_dict
     }
+
+# ==========================================
+# ASSISTENTE DE IA (SOMENTE LEITURA - DASHBOARD)
+# ==========================================
+
+DATABASE_URL_RO = os.getenv(
+    "DATABASE_URL_READONLY",
+    "postgresql://qcsoftwareia:QcsoftwareIA@179.198.119.225:5432/qcsoftware?sslmode=disable"
+)
+engine_ro = create_engine(DATABASE_URL_RO, pool_pre_ping=True)
+
+MODELOS_GEMINI = ["gemini-3.8-flash-lite", "gemini-3.8-flash"]
+
+SYSTEM_PROMPT_IA = """Você é o Assistente Executivo de Dados do sistema Q.C Software.
+Sua tarefa é gerar APENAS uma consulta SQL PostgreSQL válida e segura (somente SELECT) para responder de forma executiva e objetiva à pergunta do líder.
+Retorne APENAS o código SQL puro, sem blocos markdown (```sql), sem explicações.
+
+REGRAS ESTRITAS:
+- Apenas comandos SELECT ou WITH. Proibido INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE.
+- Consulte EXCLUSIVAMENTE as 7 tabelas listadas abaixo. É estritamente proibido acessar qualquer outra tabela (como usuarios, permissoes, auditoria, perfis, tela).
+- Nunca selecione a coluna 'foto' da tabela ocorrencias.
+- Use ILIKE '%termo%' para filtros de texto.
+- Quando consultar ocorrências, inclua data e hora formatadas com TO_CHAR(data_ocorrencias, 'DD/MM/YYYY HH24:MI') AS "Data/Hora".
+- Dê apelidos (AS) curtos e executivos em português para as colunas (no máximo 4 colunas no SELECT).
+- Adicione sempre LIMIT 3 quando não for uma agregação de linha única (COUNT, AVG, SUM).
+
+TABELAS AUTORIZADAS:
+- cargos (id_cargos, nome, data_criacao, data_atualizacao, ativo)
+- colaboradores (id_colaboradores, nome, matricula, id_cargos, email, data_criacao, data_atualizacao, ativo, setor)
+- maquinas (id_maquinas, nome, data_criacao, data_atualizacao, ativo)
+- maquinas_historico_ocorrencias (id, id_maquinas, data_hora, colaborador, problema)
+- maquinas_mapa (id_maquinas, nome, x, y, status, ativo) -- status: 'Normal', 'Manutenção', 'Parado'
+- ocorrencias (numero_ocorrencias, data_ocorrencias, id_maquinas, id_colaboradores, id_produtos, lote_produtos, numero_nota, problema, falha_onde, falha_como, falha_quando, falha_quem, observacoes, acao_corretiva, data_prazo, situacao, data_criacao, data_atualizacao) -- situacao: 'Pendente', 'Em andamento', 'Em análise', 'Concluído'
+- produtos (id_produtos, nome, categoria, data_criacao, data_atualizacao, ativo)
+"""
+
+def _norm(txt: str) -> str:
+    return unicodedata.normalize("NFKD", txt or "").encode("ASCII", "ignore").decode("ASCII").lower().strip()
+
+def resolver_sql_local_rapido(pergunta: str):
+    """Motor local instantâneo retornando a quantidade total real + no máximo 3 informações com data/hora."""
+    p = _norm(pergunta)
+
+    # Bloqueio imediato de tentativas de escrita
+    if any(w in p.split() for w in ["inserir", "cadastrar", "criar", "adicionar", "alterar", "atualizar", "editar", "excluir", "deletar", "apagar", "remover"]):
+        raise ValueError("Operação de escrita bloqueada.")
+
+# 1. Tempo médio em DIAS de máquinas paradas e em manutenção (baseado em maquinas_historico_ocorrencias)
+    if any(k in p for k in ["tempo", "media", "dias"]) and any(k in p for k in ["maquina", "parada", "manutencao", "andamento"]):
+        return """
+            WITH base_datas AS (
+                SELECT
+                    id,
+                    id_maquinas,
+                    problema,
+                    CASE
+                        WHEN data_hora ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_TIMESTAMP(data_hora, 'DD/MM/YYYY HH24:MI:SS')
+                        WHEN data_hora ~ '^\\d{4}-\\d{2}-\\d{2}' THEN data_hora::timestamp
+                        ELSE NULL
+                    END AS dt_evento
+                FROM public.maquinas_historico_ocorrencias
+            ),
+            intervalos AS (
+                SELECT
+                    problema,
+                    EXTRACT(EPOCH FROM (
+                        COALESCE(
+                            LEAD(dt_evento) OVER (PARTITION BY id_maquinas ORDER BY dt_evento ASC, id ASC),
+                            NOW()::timestamp
+                        ) - dt_evento
+                    )) / 86400.0 AS dias
+                FROM base_datas
+                WHERE dt_evento IS NOT NULL
+            )
+            SELECT
+                REPLACE(COALESCE(ROUND(AVG(dias) FILTER (WHERE problema ILIKE '%parada%' OR problema ILIKE '%parado%')::numeric, 1), 0)::text, '.', ',') || ' dias' AS "Média Máquinas Paradas",
+                REPLACE(COALESCE(ROUND(AVG(dias) FILTER (WHERE problema ILIKE '%manuten%')::numeric, 1), 0)::text, '.', ',') || ' dias' AS "Média Em Manutenção"
+            FROM intervalos
+            WHERE dias >= 0
+        """
+
+    # 2. Máquina que fica mais parada / em manutenção ou com mais ocorrências (Top 3 + Total)
+    if ("maquina" in p) and ("mais" in p or "ranking" in p or "maior" in p):
+        if "parada" in p or "manutencao" in p:
+            return """
+                SELECT
+                    COUNT(*) OVER() AS "_total_geral",
+                    m.nome AS "Máquina",
+                    COUNT(*) AS "Paradas/Manutenções"
+                FROM public.maquinas_historico_ocorrencias h
+                JOIN public.maquinas m ON m.id_maquinas = h.id_maquinas
+                WHERE h.problema ILIKE '%parada%' OR h.problema ILIKE '%manuten%' OR h.problema ILIKE '%parado%'
+                GROUP BY m.nome
+                ORDER BY "Paradas/Manutenções" DESC
+                LIMIT 3
+            """
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                m.nome AS "Máquina",
+                COUNT(o.numero_ocorrencias) AS "Ocorrências"
+            FROM public.ocorrencias o
+            JOIN public.maquinas m ON m.id_maquinas = o.id_maquinas
+            GROUP BY m.nome
+            ORDER BY "Ocorrências" DESC
+            LIMIT 3
+        """
+
+    # 3. Produto com mais ocorrências (Top 3 + Total)
+    if "produto" in p and ("mais" in p or "ranking" in p or "maior" in p) and "ocorrencia" in p:
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                pr.nome AS "Produto",
+                COUNT(o.numero_ocorrencias) AS "Ocorrências"
+            FROM public.ocorrencias o
+            JOIN public.produtos pr ON pr.id_produtos = o.id_produtos
+            GROUP BY pr.nome
+            ORDER BY "Ocorrências" DESC
+            LIMIT 3
+        """
+
+    # 4. Colaborador com mais ocorrências (Top 3 + Total)
+    if "colaborador" in p and ("mais" in p or "ranking" in p or "maior" in p) and "ocorrencia" in p:
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                c.nome AS "Colaborador",
+                COUNT(o.numero_ocorrencias) AS "Ocorrências"
+            FROM public.ocorrencias o
+            JOIN public.colaboradores c ON c.id_colaboradores = o.id_colaboradores
+            GROUP BY c.nome
+            ORDER BY "Ocorrências" DESC
+            LIMIT 3
+        """
+
+    # 5. Quantidade de ocorrências por Dia, Mês e Ano (Últimos 3 períodos + Total)
+    if "ocorrencia" in p and any(w in p for w in ["dia", "mes", "ano", "hoje", "periodo"]):
+        if "dia" in p or "hoje" in p:
+            return """
+                SELECT
+                    COUNT(*) OVER() AS "_total_geral",
+                    TO_CHAR(data_ocorrencias, 'DD/MM/YYYY') AS "Dia",
+                    COUNT(*) AS "Ocorrências"
+                FROM public.ocorrencias
+                WHERE data_ocorrencias IS NOT NULL
+                GROUP BY DATE(data_ocorrencias), TO_CHAR(data_ocorrencias, 'DD/MM/YYYY')
+                ORDER BY DATE(data_ocorrencias) DESC
+                LIMIT 3
+            """
+        if "mes" in p:
+            return """
+                SELECT
+                    COUNT(*) OVER() AS "_total_geral",
+                    TO_CHAR(data_ocorrencias, 'MM/YYYY') AS "Mês/Ano",
+                    COUNT(*) AS "Ocorrências"
+                FROM public.ocorrencias
+                WHERE data_ocorrencias IS NOT NULL
+                GROUP BY DATE_TRUNC('month', data_ocorrencias), TO_CHAR(data_ocorrencias, 'MM/YYYY')
+                ORDER BY DATE_TRUNC('month', data_ocorrencias) DESC
+                LIMIT 3
+            """
+        if "ano" in p:
+            return """
+                SELECT
+                    COUNT(*) OVER() AS "_total_geral",
+                    EXTRACT(YEAR FROM data_ocorrencias)::int AS "Ano",
+                    COUNT(*) AS "Ocorrências"
+                FROM public.ocorrencias
+                WHERE data_ocorrencias IS NOT NULL
+                GROUP BY EXTRACT(YEAR FROM data_ocorrencias)
+                ORDER BY "Ano" DESC
+                LIMIT 3
+            """
+
+    # 6. Ocorrências separadas: Pendentes, Em andamento e Concluídas (com Data e Hora)
+    if "ocorrencia" in p:
+        if "andamento" in p:
+            return """
+                SELECT
+                    COUNT(*) OVER() AS "_total_geral",
+                    o.numero_ocorrencias AS "Nº",
+                    TO_CHAR(COALESCE(o.data_ocorrencias, o.data_criacao), 'DD/MM/YYYY HH24:MI') AS "Data/Hora",
+                    m.nome AS "Máquina",
+                    o.problema AS "Problema"
+                FROM public.ocorrencias o
+                LEFT JOIN public.maquinas m ON m.id_maquinas = o.id_maquinas
+                WHERE o.situacao = 'Em andamento'
+                ORDER BY COALESCE(o.data_ocorrencias, o.data_criacao) DESC
+                LIMIT 3
+            """
+        if "pendente" in p or "aberta" in p:
+            return """
+                SELECT
+                    COUNT(*) OVER() AS "_total_geral",
+                    o.numero_ocorrencias AS "Nº",
+                    TO_CHAR(COALESCE(o.data_ocorrencias, o.data_criacao), 'DD/MM/YYYY HH24:MI') AS "Data/Hora",
+                    m.nome AS "Máquina",
+                    o.problema AS "Problema"
+                FROM public.ocorrencias o
+                LEFT JOIN public.maquinas m ON m.id_maquinas = o.id_maquinas
+                WHERE o.situacao = 'Pendente'
+                ORDER BY COALESCE(o.data_ocorrencias, o.data_criacao) DESC
+                LIMIT 3
+            """
+        if "concluida" in p or "resolvida" in p or "finalizada" in p:
+            return """
+                SELECT
+                    COUNT(*) OVER() AS "_total_geral",
+                    o.numero_ocorrencias AS "Nº",
+                    TO_CHAR(COALESCE(o.data_ocorrencias, o.data_criacao), 'DD/MM/YYYY HH24:MI') AS "Data/Hora",
+                    m.nome AS "Máquina",
+                    o.problema AS "Problema"
+                FROM public.ocorrencias o
+                LEFT JOIN public.maquinas m ON m.id_maquinas = o.id_maquinas
+                WHERE o.situacao = 'Concluído'
+                ORDER BY COALESCE(o.data_ocorrencias, o.data_criacao) DESC
+                LIMIT 3
+            """
+        if "quantas" in p or "total" in p or "resumo" in p or "situacao" in p:
+            return """
+                SELECT
+                    COUNT(*) OVER() AS "_total_geral",
+                    situacao AS "Situação",
+                    COUNT(*) AS "Quantidade"
+                FROM public.ocorrencias
+                GROUP BY situacao
+                ORDER BY "Quantidade" DESC
+                LIMIT 3
+            """
+        # Consulta genérica de ocorrências recentes com data e hora
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                o.numero_ocorrencias AS "Nº",
+                TO_CHAR(COALESCE(o.data_ocorrencias, o.data_criacao), 'DD/MM/YYYY HH24:MI') AS "Data/Hora",
+                m.nome AS "Máquina",
+                o.problema AS "Problema"
+            FROM public.ocorrencias o
+            LEFT JOIN public.maquinas m ON m.id_maquinas = o.id_maquinas
+            ORDER BY COALESCE(o.data_ocorrencias, o.data_criacao) DESC
+            LIMIT 3
+        """
+
+    # 7. Máquinas paradas ou em manutenção no mapa atual (Total real + 3 itens)
+    if "maquina" in p and ("parada" in p or "manutencao" in p):
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                nome AS "Máquina",
+                status AS "Status"
+            FROM public.maquinas_mapa
+            WHERE ativo = true AND status IN ('Parado', 'Manutenção')
+            ORDER BY status, nome
+            LIMIT 3
+        """
+
+    if "maquina" in p and ("status" in p or "mapa" in p or "quantas" in p or "quantidade" in p):
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                status AS "Status",
+                COUNT(*) AS "Quantidade"
+            FROM public.maquinas_mapa
+            WHERE ativo = true
+            GROUP BY status
+            ORDER BY "Quantidade" DESC
+            LIMIT 3
+        """
+
+    # 8. Colaboradores e Cargos (Total real + 3 itens)
+    if ("colaborador" in p and "cargo" in p) or ("cargo" in p and ("colaborador" in p or "quantos" in p or "quantidade" in p)):
+        if "quantidade" in p or "quantos" in p or "por cargo" in p:
+            return """
+                SELECT
+                    COUNT(*) OVER() AS "_total_geral",
+                    COALESCE(cg.nome, 'Sem Cargo') AS "Cargo",
+                    COUNT(c.id_colaboradores) AS "Colaboradores"
+                FROM public.cargos cg
+                LEFT JOIN public.colaboradores c ON c.id_cargos = cg.id_cargos AND c.ativo = true
+                WHERE cg.ativo = true
+                GROUP BY cg.nome
+                ORDER BY "Colaboradores" DESC
+                LIMIT 3
+            """
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                c.nome AS "Colaborador",
+                COALESCE(cg.nome, 'Sem Cargo') AS "Cargo"
+            FROM public.colaboradores c
+            LEFT JOIN public.cargos cg ON cg.id_cargos = c.id_cargos
+            WHERE c.ativo = true
+            ORDER BY c.nome
+            LIMIT 3
+        """
+
+    if "cargo" in p:
+        if "quantidade" in p or "quantos" in p or "total" in p:
+            return """
+                SELECT COUNT(*) AS "Total de Cargos Ativos"
+                FROM public.cargos
+                WHERE ativo = true
+            """
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                nome AS "Cargo"
+            FROM public.cargos
+            WHERE ativo = true
+            ORDER BY nome
+            LIMIT 3
+        """
+
+    if "colaborador" in p:
+        if "setor" in p:
+            return """
+                SELECT
+                    COUNT(*) OVER() AS "_total_geral",
+                    COALESCE(setor, 'Não Informado') AS "Setor",
+                    COUNT(*) AS "Colaboradores"
+                FROM public.colaboradores
+                WHERE ativo = true
+                GROUP BY setor
+                ORDER BY "Colaboradores" DESC
+                LIMIT 3
+            """
+        if "quantidade" in p or "quantos" in p or "total" in p:
+            return """
+                SELECT COUNT(*) AS "Total de Colaboradores Ativos"
+                FROM public.colaboradores
+                WHERE ativo = true
+            """
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                c.nome AS "Nome",
+                c.setor AS "Setor"
+            FROM public.colaboradores c
+            WHERE c.ativo = true
+            ORDER BY c.nome
+            LIMIT 3
+        """
+
+    # 9. Produtos (Total real + 3 itens)
+    if "produto" in p:
+        if "quantidade" in p or "quantos" in p or "total" in p:
+            return """
+                SELECT
+                    COUNT(*) AS "Total de Produtos Ativos",
+                    COUNT(DISTINCT categoria) AS "Total de Categorias"
+                FROM public.produtos
+                WHERE ativo = true
+            """
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                nome AS "Produto",
+                categoria AS "Categoria"
+            FROM public.produtos
+            WHERE ativo = true
+            ORDER BY nome
+            LIMIT 3
+        """
+
+    # 10. Histórico de ocorrências das máquinas (Total real + 3 itens com data/hora)
+    if "historico" in p:
+        return """
+            SELECT
+                COUNT(*) OVER() AS "_total_geral",
+                TO_CHAR(data_hora, 'DD/MM/YYYY HH24:MI') AS "Data/Hora",
+                problema AS "Ocorrência"
+            FROM public.maquinas_historico_ocorrencias
+            ORDER BY id DESC
+            LIMIT 3
+        """
+
+    return None
+
+def validar_sql_seguro(sql_query: str) -> str:
+    """Trava de segurança no backend para garantir que a query seja 100% leitura e use apenas tabelas permitidas."""
+    sql_limpo = re.sub(r"```sql|```", "", sql_query or "", flags=re.IGNORECASE).strip().rstrip(";").strip()
+
+    if ";" in sql_limpo:
+        raise ValueError("Múltiplas instruções SQL não são permitidas.")
+
+    if not re.match(r"^(SELECT|WITH)\b", sql_limpo, flags=re.IGNORECASE):
+        raise ValueError(f"Apenas consultas SELECT ou WITH são permitidas.")
+
+    palavras_proibidas = [
+        r"\bINSERT\b", r"\bUPDATE\b", r"\bDELETE\b", r"\bDROP\b",
+        r"\bALTER\b", r"\bTRUNCATE\b", r"\bGRANT\b", r"\bREVOKE\b",
+        r"\bCREATE\b", r"\bCOPY\b", r"\bEXECUTE\b",
+        r"\bUSUARIOS\b", r"\bPERMISSOES\b", r"\bAUDITORIA\b",
+        r"\bPERFIS\b", r"\bTELA\b", r"\bSENHA_HASH\b", r"\bPG_CATALOG\b",
+        r"\bINFORMATION_SCHEMA\b"
+    ]
+    for padrao in palavras_proibidas:
+        if re.search(padrao, sql_limpo, flags=re.IGNORECASE):
+            raise ValueError(f"Termo bloqueado na consulta: {padrao}")
+
+    return sql_limpo
+
+def gerar_sql_gemini(api_key: str, pergunta: str) -> str:
+    """Chama a API do Gemini apenas para perguntas abertas, com timeout curto."""
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=10_000)
+    )
+    ultimo_erro = None
+    for modelo in MODELOS_GEMINI:
+        try:
+            resposta = client.models.generate_content(
+                model=modelo,
+                contents=f"Pergunta do usuário: {pergunta}",
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT_IA,
+                    temperature=0.0,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
+                )
+            )
+            return resposta.text
+        except Exception as err:
+            ultimo_erro = err
+            logger.warning(f"[IA Gemini] Modelo '{modelo}' falhou ({type(err).__name__}), tentando próximo...")
+            continue
+    raise ultimo_erro
+
+def formatar_resultado_rapido(linhas: list, colunas: list) -> str:
+    """Exibe primeiro a quantidade total real e em seguida a listagem com até 3 registros (incluindo Data/Hora)."""
+    if not linhas:
+        return "**Quantidade total:** 0"
+
+    total_real = linhas[0].get("_total_geral", len(linhas))
+    colunas_visiveis = [c for c in colunas if c != "_total_geral"]
+
+    # Caso 1: Indicador único / consolidado (ex: Tempo Médio Geral, Contagens diretas)
+    if len(linhas) == 1 and "_total_geral" not in colunas:
+        partes = []
+        for col in colunas_visiveis[:4]:
+            val = linhas[0][col]
+            if val is not None and str(val).strip() != "":
+                label = col.replace("_", " ").capitalize()
+                if isinstance(val, bool):
+                    val = "Sim" if val else "Não"
+                partes.append(f"**{label}:** {val}")
+        return "\n".join(partes)
+
+    # Caso 2: Quantidade total no topo + listagem com no máximo 3 itens
+    cabecalho = f"**Quantidade total:** {total_real}\n\n"
+    itens = []
+    for row in linhas[:3]:
+        partes = []
+        for col in colunas_visiveis[:4]:
+            val = row[col]
+            if val is not None and str(val).strip() != "":
+                label = col.replace("_", " ").capitalize()
+                if isinstance(val, bool):
+                    val = "Sim" if val else "Não"
+                partes.append(f"**{label}:** {val}")
+        itens.append("- " + " | ".join(partes))
+
+    return cabecalho + "\n".join(itens)
+
+class PerguntaDashboardSchema(BaseModel):
+    pergunta: str
+
+@app.post("/api/assistente-dashboard", tags=["Assistente IA"])
+async def consultar_assistente_dashboard(dados: PerguntaDashboardSchema):
+    try:
+        # Etapa 1: Tenta resolver instantaneamente pelo motor local (< 10ms)
+        sql_gerado = resolver_sql_local_rapido(dados.pergunta)
+
+        # Se for uma pergunta aberta/customizada, usa o Gemini para gerar o SQL
+        if not sql_gerado:
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                raise HTTPException(status_code=500, detail="GEMINI_API_KEY não configurada no servidor.")
+            texto_sql = gerar_sql_gemini(api_key=api_key, pergunta=dados.pergunta)
+            sql_gerado = validar_sql_seguro(texto_sql)
+        else:
+            sql_gerado = validar_sql_seguro(sql_gerado)
+
+        logger.info(f"[IA SQL Executado]: {sql_gerado}")
+
+        # Etapa 2: Executa a consulta no PostgreSQL em modo Read-Only
+        with engine_ro.connect() as conn:
+            conn.execute(text("SET LOCAL statement_timeout = '5000'"))
+            conn.execute(text("SET TRANSACTION READ ONLY"))
+            resultado = conn.execute(text(sql_gerado))
+            colunas = list(resultado.keys())
+            linhas = [dict(zip(colunas, row)) for row in resultado.fetchall()]
+
+        # Etapa 3: Formatação executiva imediata
+        resposta_formatada = formatar_resultado_rapido(linhas, colunas)
+
+        return {
+            "sucesso": True,
+            "resposta": resposta_formatada,
+            "total_registros": linhas[0].get("_total_geral", len(linhas)) if linhas else 0
+        }
+
+    except ValueError as sec_err:
+        logger.warning(f"[IA Bloqueio de Segurança]: {str(sec_err)}")
+        return {
+            "sucesso": False,
+            "resposta": f"Consulta bloqueada pela política de segurança: {str(sec_err)}"
+        }
+    except Exception as e:
+        erro_str = str(e)
+        logger.error(f"[Erro Assistente Dashboard]: {type(e).__name__}: {erro_str}")
+        if "503" in erro_str or "504" in erro_str or "DEADLINE_EXCEEDED" in erro_str:
+            return {
+                "sucesso": False,
+                "resposta": "O servidor da IA está temporariamente congestionado para perguntas livres. Use os botões rápidos ou pergunte sobre **máquinas paradas**, **tempo médio**, **ocorrências** ou **colaboradores**."
+            }
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__}: {erro_str}"
+        )
+
+@app.get("/api/dashboard/catalogos", tags=["Dashboard"])
+def obter_catalogos_dashboard():
+    """Retorna produtos, máquinas e setores dos colaboradores para o Dashboard."""
+    try:
+        with engine_ro.connect() as conn:
+            conn.execute(text("SET LOCAL statement_timeout = '5000'"))
+            conn.execute(text("SET TRANSACTION READ ONLY"))
+            
+            produtos = conn.execute(
+                text("SELECT id_produtos, nome FROM public.produtos")
+            ).mappings().all()
+            
+            maquinas = conn.execute(
+                text("SELECT id_maquinas, nome FROM public.maquinas")
+            ).mappings().all()
+            
+            colaboradores = conn.execute(
+                text("SELECT id_colaboradores, nome, matricula, setor FROM public.colaboradores")
+            ).mappings().all()
+
+        return {
+            "produtos": [dict(r) for r in produtos],
+            "maquinas": [dict(r) for r in maquinas],
+            "colaboradores": [dict(r) for r in colaboradores],
+        }
+    except Exception as e:
+        logger.error(f"[Erro Catálogos Dashboard]: {type(e).__name__}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao carregar catálogos do dashboard: {str(e)}"
+        )
