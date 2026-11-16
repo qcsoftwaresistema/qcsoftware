@@ -329,39 +329,79 @@
     // CARREGA OS CATÁLOGOS AUXILIARES (Sistema)
     async function carregarCatalogosAuxiliares() {
         try {
-            const resProd = await fetch(`${SERVIDOR_SISTEMA}/produtos/`);
-            if (resProd.ok) {
-                const produtosLista = await resProd.json();
+            // Busca qualquer token salvo no navegador (caso a rota /colaboradores/ exija login)
+            const token = localStorage.getItem("token")
+                || sessionStorage.getItem("token")
+                || localStorage.getItem("access_token")
+                || sessionStorage.getItem("access_token")
+                || localStorage.getItem("qc_token")
+                || sessionStorage.getItem("qc_token");
+
+            const opcoesFetch = token
+                ? { headers: { "Accept": "application/json", "Authorization": `Bearer ${token}` } }
+                : { headers: { "Accept": "application/json" } };
+
+            const extrairLista = (json) => {
+                if (Array.isArray(json)) return json;
+                if (json && typeof json === "object") {
+                    return json.items || json.dados || json.data || json.colaboradores || json.resultados || [];
+                }
+                return [];
+            };
+
+            const [resProd, resMaq, resColab] = await Promise.allSettled([
+                fetch(`${SERVIDOR_SISTEMA}/produtos/`, opcoesFetch),
+                fetch(`${SERVIDOR_SISTEMA}/maquinas/`, opcoesFetch),
+                fetch(`${SERVIDOR_SISTEMA}/colaboradores/`, opcoesFetch)
+            ]);
+
+            if (resProd.status === "fulfilled" && resProd.value.ok) {
+                const produtosLista = extrairLista(await resProd.value.json());
                 produtosLista.forEach(p => {
-                    const idKey = p.id_produtos || p.id;
-                    if (idKey) mapaProdutosGeral[String(idKey).trim()] = p.nome;
-                });
-            }
-            
-            const resMaq = await fetch(`${SERVIDOR_SISTEMA}/maquinas/`);
-            if (resMaq.ok) {
-                const maquinasLista = await resMaq.json();
-                maquinasLista.forEach(m => {
-                    const idKey = m.id_maquinas || m.id;
-                    if (idKey) mapaMaquinasGeral[String(idKey).trim()] = m.nome;
-                });
-            }
-
-            const resColab = await fetch(`${SERVIDOR_SISTEMA}/colaboradores/`);
-            if (resColab.ok) {
-                const colaboradoresLista = await resColab.json();
-                colaboradoresLista.forEach(c => {
-                    const setorNome = c.setor;
-                    if (setorNome && String(setorNome).trim() !== "" && String(setorNome) !== "Não Informado" && String(setorNome) !== "null") {
-                        const setorLimpo = String(setorNome).trim();
-
-                        const idColab = c.id_colaboradores || c.id_colaborador || c.id || c._id;
-                        if (idColab) mapaSetorPorIdColab[String(idColab).trim()] = setorLimpo;
-                        if (c.matricula) mapaSetorPorMatriculaColab[String(c.matricula).trim()] = setorLimpo;
-                        if (c.nome) mapaSetorPorIdColab[String(c.nome).trim().toLowerCase()] = setorLimpo;
-                        if (c.email) mapaSetorPorIdColab[String(c.email).trim().toLowerCase()] = setorLimpo;
+                    const idKey = p.id_produtos ?? p.id;
+                    if (idKey !== undefined && idKey !== null) {
+                        mapaProdutosGeral[String(idKey).trim()] = p.nome;
                     }
                 });
+            }
+
+            if (resMaq.status === "fulfilled" && resMaq.value.ok) {
+                const maquinasLista = extrairLista(await resMaq.value.json());
+                maquinasLista.forEach(m => {
+                    const idKey = m.id_maquinas ?? m.id;
+                    if (idKey !== undefined && idKey !== null) {
+                        mapaMaquinasGeral[String(idKey).trim()] = m.nome;
+                    }
+                });
+            }
+
+            if (resColab.status === "fulfilled" && resColab.value.ok) {
+                const colaboradoresLista = extrairLista(await resColab.value.json());
+                colaboradoresLista.forEach(c => {
+                    const setorBruto = c.setor;
+                    if (setorBruto !== undefined && setorBruto !== null) {
+                        const setorLimpo = String(setorBruto).trim();
+                        if (setorLimpo !== "" && setorLimpo.toLowerCase() !== "null" && setorLimpo !== "Não Informado") {
+                            const idColab = c.id_colaboradores ?? c.id_colaborador ?? c.id;
+                            if (idColab !== undefined && idColab !== null) {
+                                mapaSetorPorIdColab[String(idColab).trim()] = setorLimpo;
+                            }
+                            if (c.matricula !== undefined && c.matricula !== null) {
+                                mapaSetorPorMatriculaColab[String(c.matricula).trim()] = setorLimpo;
+                            }
+                            if (c.nome) {
+                                mapaSetorPorIdColab[String(c.nome).trim().toLowerCase()] = setorLimpo;
+                            }
+                        }
+                    }
+                });
+
+                // Redesenha o gráfico assim que os setores forem carregados
+                if (Array.isArray(dadosGlobais) && dadosGlobais.length > 0) {
+                    renderizarGraficoSetores(dadosGlobais);
+                }
+            } else {
+                console.warn("Aviso: /colaboradores/ retornou erro ou bloqueio:", resColab);
             }
         } catch (error) {
             console.warn("Falha ao carregar catálogos auxiliares:", error);
@@ -565,73 +605,39 @@
         return s;
     }
 
-    function renderizarGraficoSetores(ocorrencias) {
+function renderizarGraficoSetores(ocorrencias) {
         try {
             const ctx = document.getElementById('chartSetores');
-            if (!ctx) return;
-
-            if (!ocorrencias || !Array.isArray(ocorrencias)) return;
-
-            const mapaId = typeof mapaSetorPorIdColab !== "undefined" ? mapaSetorPorIdColab : {};
-            const mapaMatricula = typeof mapaSetorPorMatriculaColab !== "undefined" ? mapaSetorPorMatriculaColab : {};
+            if (!ctx || !Array.isArray(ocorrencias)) return;
 
             const contagemSetores = {};
 
             ocorrencias.forEach((o) => {
                 if (!o) return;
-
                 let setorEncontrado = null;
 
-                const idColab = o.id_colaboradores ?? o.id_colaborador ?? o.idColaborador ?? o.colaborador_id ?? o.usuario_id ?? o.id 
-                    ?? (o.colaborador && (o.colaborador.id_colaboradores ?? o.colaborador.id_colaborador ?? o.colaborador.idColaborador ?? o.colaborador.id));
-                
-                const matColab = o.matricula ?? o.matricula_colaborador 
-                    ?? (o.colaborador && (o.colaborador.matricula ?? o.colaborador.matricula_colaborador));
-                
-                const nomeColab = o.nome ?? o.nome_colaborador ?? o.nomeColaborador 
-                    ?? (o.colaborador && (o.colaborador.nome ?? o.colaborador.nome_colaborador));
-                
-                const emailColab = o.email ?? o.email_colaborador 
-                    ?? (o.colaborador && o.colaborador.email);
-
-                if (o.colaborador && typeof o.colaborador === 'object' && o.colaborador.setor) {
-                    const setorAninhado = String(o.colaborador.setor).trim();
-                    if (setorAninhado && setorAninhado !== "Não Informado" && setorAninhado !== "null" && setorAninhado !== "undefined") {
-                        setorEncontrado = setorAninhado;
+                // 1. Cruzamento principal pelo id_colaboradores (ex: 33) com a coluna 'setor' de colaboradores
+                if (o.id_colaboradores !== undefined && o.id_colaboradores !== null) {
+                    const chaveId = String(o.id_colaboradores).trim();
+                    if (mapaSetorPorIdColab[chaveId]) {
+                        setorEncontrado = mapaSetorPorIdColab[chaveId];
                     }
                 }
 
-                if (!setorEncontrado && o.setor) {
-                    const setorRaiz = String(o.setor).trim();
-                    if (setorRaiz && setorRaiz !== "Não Informado" && setorRaiz !== "null" && setorRaiz !== "undefined") {
-                        setorEncontrado = setorRaiz;
+                // 2. Fallback pelo nome em falha_quem (ex: "Paulo Souza") caso o ID não esteja na lista
+                if (!setorEncontrado && o.falha_quem) {
+                    const chaveNome = String(o.falha_quem).trim().toLowerCase();
+                    if (mapaSetorPorIdColab[chaveNome]) {
+                        setorEncontrado = mapaSetorPorIdColab[chaveNome];
                     }
                 }
 
-                if (!setorEncontrado && idColab !== undefined && idColab !== null) {
-                    const chaveId = String(idColab).trim();
-                    if (mapaId[chaveId]) setorEncontrado = mapaId[chaveId];
+                // 3. Fallback caso a ocorrência já traga o campo setor
+                if (!setorEncontrado && o.setor && String(o.setor).trim() !== "" && String(o.setor).trim() !== "Não Informado") {
+                    setorEncontrado = String(o.setor).trim();
                 }
 
-                if (!setorEncontrado && matColab !== undefined && matColab !== null) {
-                    const chaveMat = String(matColab).trim();
-                    if (mapaMatricula[chaveMat]) setorEncontrado = mapaMatricula[chaveMat];
-                }
-
-                if (!setorEncontrado && nomeColab) {
-                    const chaveNome = String(nomeColab).trim().toLowerCase();
-                    if (mapaId[chaveNome]) setorEncontrado = mapaId[chaveNome];
-                }
-
-                if (!setorEncontrado && emailColab) {
-                    const chaveEmail = String(emailColab).trim().toLowerCase();
-                    if (mapaId[chaveEmail]) setorEncontrado = mapaId[chaveEmail];
-                }
-
-                const setorFinal = (setorEncontrado && String(setorEncontrado).trim() !== "" && String(setorEncontrado).trim() !== "Não Informado") 
-                    ? String(setorEncontrado).trim() 
-                    : "Não Informado";
-
+                const setorFinal = setorEncontrado || "Não Informado";
                 contagemSetores[setorFinal] = (contagemSetores[setorFinal] || 0) + 1;
             });
 
@@ -642,7 +648,7 @@
             const labels = dadosOrdenados.map(d => d.setor);
             const valores = dadosOrdenados.map(d => d.total);
 
-            if (typeof chartSetoresInstancia !== "undefined" && chartSetoresInstancia) {
+            if (chartSetoresInstancia) {
                 chartSetoresInstancia.destroy();
             }
 
@@ -906,5 +912,508 @@
         return true;
     }
 </script>
+
+<!-- ==========================================
+     WIDGET ASSISTENTE DE IA - Q.C SOFTWARE
+     ========================================== -->
+<style>
+  :root {
+    --qc-primary: #1d3151;
+    --qc-primary-hover: #1d3151;
+    --qc-dark: #1e293b;
+    --qc-bg: #ffffff;
+    --qc-bg-chat: #f8fafc;
+    --qc-border: #e2e8f0;
+    --qc-text: #334155;
+    --qc-text-muted: #64748b;
+  }
+
+  /* Botão Flutuante */
+  #qc-ai-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--qc-primary), #1e40af);
+    color: #fff;
+    border: none;
+    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.35);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  #qc-ai-fab:hover {
+    transform: translateY(-3px) scale(1.04);
+    box-shadow: 0 14px 30px rgba(37, 99, 235, 0.45);
+  }
+
+  /* Janela do Chat */
+  #qc-ai-window {
+    position: fixed;
+    bottom: 96px;
+    right: 24px;
+    width: 400px;
+    max-width: calc(100vw - 32px);
+    height: 560px;
+    max-height: calc(100vh - 120px);
+    background: var(--qc-bg);
+    border-radius: 16px;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
+    border: 1px solid var(--qc-border);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 9999;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  #qc-ai-window.open {
+    display: flex;
+    animation: qcFadeUp 0.22s ease-out;
+  }
+
+  @keyframes qcFadeUp {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Cabeçalho */
+  .qc-ai-header {
+    background: var(--qc-dark);
+    color: #fff;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .qc-ai-header-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .qc-ai-badge {
+    background: rgba(37, 99, 235, 0.25);
+    border: 1px solid rgba(96, 165, 250, 0.4);
+    color: #93c5fd;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+
+  .qc-ai-close {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .qc-ai-close:hover { color: #fff; }
+
+  /* Área de Mensagens */
+  .qc-ai-messages {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    background: var(--qc-bg-chat);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .qc-msg {
+    max-width: 85%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    word-wrap: break-word;
+  }
+
+  .qc-msg.bot {
+    align-self: flex-start;
+    background: #ffffff;
+    color: var(--qc-text);
+    border: 1px solid var(--qc-border);
+    border-bottom-left-radius: 4px;
+  }
+
+  .qc-msg.user {
+    align-self: flex-end;
+    background: var(--qc-primary);
+    color: #ffffff;
+    border-bottom-right-radius: 4px;
+  }
+
+  /* Formatação básica de listas e negrito dentro da resposta */
+  .qc-msg.bot strong { color: var(--qc-dark); }
+  .qc-msg.bot ul { margin: 6px 0; padding-left: 18px; }
+  .qc-msg.bot li { margin-bottom: 4px; }
+
+  /* Sugestões Rápidas */
+  .qc-ai-suggestions {
+    padding: 8px 16px;
+    background: var(--qc-bg-chat);
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    border-top: 1px solid var(--qc-border);
+  }
+
+  .qc-chip {
+    white-space: nowrap;
+    background: #eff6ff;
+    color: var(--qc-primary);
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .qc-chip:hover { background: #dbeafe; }
+
+  /* Área de Input */
+  .qc-ai-input-area {
+    padding: 12px 16px;
+    background: #fff;
+    border-top: 1px solid var(--qc-border);
+    display: flex;
+    gap: 8px;
+  }
+
+  #qc-ai-input {
+    flex: 1;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    outline: none;
+    color: var(--qc-dark);
+  }
+
+  #qc-ai-input:focus {
+    border-color: var(--qc-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  }
+
+  #qc-ai-send {
+    background: var(--qc-primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  #qc-ai-send:hover:not(:disabled) { background: var(--qc-primary-hover); }
+  #qc-ai-send:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  /* Animação Digitando */
+  .qc-typing {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px 2px;
+  }
+  .qc-typing span {
+    width: 6px;
+    height: 6px;
+    background: #94a3b8;
+    border-radius: 50%;
+    animation: qcBounce 1.2s infinite ease-in-out;
+  }
+  .qc-typing span:nth-child(2) { animation-delay: 0.2s; }
+  .qc-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes qcBounce {
+    0%, 80%, 100% { transform: scale(0.6); }
+    40% { transform: scale(1); }
+  }
+</style>
+
+<!-- Botão Flutuante (Ícone Indústria 4.0 / Fábrica + IA) -->
+<button id="qc-ai-fab" title="Consultar Dados com IA" aria-label="Abrir Assistente de IA">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10l-7 4v-4l-7 4V5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/>
+    <path d="M17 18h1"/>
+    <path d="M12 18h1"/>
+    <path d="M7 18h1"/>
+    <path d="M19 2v4M17 4h4"/>
+  </svg>
+</button>
+
+<!-- Janela do Assistente -->
+<div id="qc-ai-window">
+  <div class="qc-ai-header">
+    <div class="qc-ai-header-info">
+      <div>
+        <div style="font-weight: 600; font-size: 15px;">Assistente Q.C IA</div>
+        <div style="font-size: 11px; color: #94a3b8;">Consulta inteligente em tempo real</div>
+      </div>
+      <span class="qc-ai-badge">Somente Leitura</span>
+    </div>
+    <button class="qc-ai-close" id="qc-ai-close" title="Fechar">&times;</button>
+  </div>
+
+  <div class="qc-ai-messages" id="qc-ai-messages">
+    <div class="qc-msg bot">
+      Olá! Sou o assistente de dados do <strong>Q.C Software</strong>.<br><br>
+      Posso consultar ocorrências, status de máquinas no mapa, histórico de manutenção e colaboradores. O que você gostaria de saber?
+    </div>
+  </div>
+
+<!-- Perguntas rápidas clicáveis -->
+  <div class="qc-ai-suggestions">
+    <button class="qc-chip" onclick="enviarSugestao('Quais máquinas estão paradas ou em manutenção?')">Máquinas paradas</button>
+    <button class="qc-chip" onclick="enviarSugestao('Tempo médio de máquinas paradas e em manutenção')">Tempo médio parada</button>
+    <button class="qc-chip" onclick="enviarSugestao('Quais ocorrências estão pendentes?')">Ocorrências pendentes</button>
+    <button class="qc-chip" onclick="enviarSugestao('Quais ocorrências estão em andamento?')">Ocorrências em andamento</button>
+  </div>
+
+  <form class="qc-ai-input-area" id="qc-ai-form">
+    <input type="text" id="qc-ai-input" placeholder="Pergunte sobre máquinas, ocorrências..." autocomplete="off" required />
+    <button type="submit" id="qc-ai-send">Enviar</button>
+  </form>
+</div>
+
+<script>
+  (function () {
+    // Detecta automaticamente a URL base da API (funciona tanto local quanto em produção qcsoftware.tech)
+    const API_URL = window.location.origin.includes('5500')
+      ? 'http://127.0.0.1:8000/api/assistente-dashboard'
+      : '/api/assistente-dashboard';
+
+    const fab = document.getElementById('qc-ai-fab');
+    const chatWindow = document.getElementById('qc-ai-window');
+    const closeBtn = document.getElementById('qc-ai-close');
+    const form = document.getElementById('qc-ai-form');
+    const input = document.getElementById('qc-ai-input');
+    const sendBtn = document.getElementById('qc-ai-send');
+    const messagesContainer = document.getElementById('qc-ai-messages');
+
+    // Abrir / Fechar chat
+    fab.addEventListener('click', () => {
+      chatWindow.classList.toggle('open');
+      if (chatWindow.classList.contains('open')) {
+        input.focus();
+      }
+    });
+
+    closeBtn.addEventListener('click', () => {
+      chatWindow.classList.remove('open');
+    });
+
+    // Converte marcações simples de Markdown (**negrito**, listas e quebras de linha) para HTML seguro
+    function formatarTextoIA(texto) {
+      let seguro = texto
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      // Negrito **texto**
+      seguro = seguro.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      
+      // Listas com * ou -
+      seguro = seguro.replace(/^\s*[\*\-]\s+(.*)$/gm, '<li>$1</li>');
+      seguro = seguro.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+
+      // Quebras de linha
+      seguro = seguro.replace(/\n/g, '<br>');
+      return seguro;
+    }
+
+    function adicionarMensagem(texto, remetente) {
+      const div = document.createElement('div');
+      div.className = `qc-msg ${remetente}`;
+      if (remetente === 'bot') {
+        div.innerHTML = formatarTextoIA(texto);
+      } else {
+        div.textContent = texto;
+      }
+      messagesContainer.appendChild(div);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      return div;
+    }
+
+    function adicionarIndicadorDigitando() {
+      const div = document.createElement('div');
+      div.className = 'qc-msg bot';
+      div.id = 'qc-typing-indicator';
+      div.innerHTML = '<div class="qc-typing"><span></span><span></span><span></span></div>';
+      messagesContainer.appendChild(div);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function removerIndicadorDigitando() {
+      const indicator = document.getElementById('qc-typing-indicator');
+      if (indicator) indicator.remove();
+    }
+
+    async function enviarPergunta(pergunta) {
+      if (!pergunta.trim()) return;
+
+      adicionarMensagem(pergunta, 'user');
+      input.value = '';
+      input.disabled = true;
+      sendBtn.disabled = true;
+      adicionarIndicadorDigitando();
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ pergunta: pergunta })
+        });
+
+        removerIndicadorDigitando();
+
+        if (!response.ok) {
+          throw new Error('Falha na comunicação com o servidor.');
+        }
+
+        const data = await response.json();
+        adicionarMensagem(data.resposta || 'Não obtive retorno do banco.', 'bot');
+
+      } catch (error) {
+        removerIndicadorDigitando();
+        adicionarMensagem('Erro ao consultar o banco de dados. Verifique se a API está ativa.', 'bot');
+        console.error('[Erro Assistente IA]:', error);
+      } finally {
+        input.disabled = false;
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      enviarPergunta(input.value);
+    });
+
+    // Função global para os botões de sugestão rápida
+    window.enviarSugestao = function (texto) {
+      input.value = texto;
+      enviarPergunta(texto);
+    };
+  })();
+
+// Localiza automaticamente o token JWT salvo pelo login no navegador
+    function obterOpcoesFetchSistema() {
+        let tokenEncontrado = null;
+
+        for (const storage of [localStorage, sessionStorage]) {
+            for (let i = 0; i < storage.length; i++) {
+                const chave = storage.key(i);
+                const valor = storage.getItem(chave);
+                if (valor && (valor.startsWith("eyJ") || ["token", "access_token", "jwt", "qc_token", "auth_token"].includes(chave.toLowerCase()))) {
+                    tokenEncontrado = valor.replace(/^"|"$/g, "").replace(/^Bearer\s+/i, "");
+                    break;
+                }
+            }
+            if (tokenEncontrado) break;
+        }
+
+        const headers = { "Accept": "application/json" };
+        if (tokenEncontrado) {
+            headers["Authorization"] = `Bearer ${tokenEncontrado}`;
+        }
+
+        return {
+            headers,
+            credentials: "include"
+        };
+    }
+
+   // CARREGA OS CATÁLOGOS AUXILIARES (Produtos, Máquinas e Setores dos Colaboradores)
+    async function carregarCatalogosAuxiliares() {
+        try {
+            const urlCatalogosLocal = window.location.origin.includes('5500')
+                ? 'http://127.0.0.1:8000/api/dashboard/catalogos'
+                : '/api/dashboard/catalogos';
+
+            const res = await fetch(urlCatalogosLocal);
+            if (!res.ok) {
+                console.warn("Rota /api/dashboard/catalogos retornou status:", res.status);
+                return;
+            }
+
+            const dados = await res.json();
+
+            (dados.produtos || []).forEach(p => {
+                if (p.id_produtos !== undefined && p.id_produtos !== null) {
+                    mapaProdutosGeral[String(p.id_produtos).trim()] = p.nome;
+                }
+            });
+
+            (dados.maquinas || []).forEach(m => {
+                if (m.id_maquinas !== undefined && m.id_maquinas !== null) {
+                    mapaMaquinasGeral[String(m.id_maquinas).trim()] = m.nome;
+                }
+            });
+
+            (dados.colaboradores || []).forEach(c => {
+                const setorBruto = c.setor;
+                if (setorBruto !== undefined && setorBruto !== null) {
+                    const setorLimpo = String(setorBruto).trim();
+                    if (setorLimpo !== "" && setorLimpo.toLowerCase() !== "null" && setorLimpo !== "Não Informado") {
+                        if (c.id_colaboradores !== undefined && c.id_colaboradores !== null) {
+                            mapaSetorPorIdColab[String(c.id_colaboradores).trim()] = setorLimpo;
+                        }
+                        if (c.matricula !== undefined && c.matricula !== null) {
+                            mapaSetorPorMatriculaColab[String(c.matricula).trim()] = setorLimpo;
+                        }
+                        if (c.nome) {
+                            mapaSetorPorIdColab[String(c.nome).trim().toLowerCase()] = setorLimpo;
+                        }
+                    }
+                }
+            });
+
+            // Redesenha o gráfico de setores imediatamente se as ocorrências já tiverem sido carregadas
+            if (Array.isArray(dadosGlobais) && dadosGlobais.length > 0) {
+                renderizarGraficoSetores(dadosGlobais);
+            }
+        } catch (error) {
+            console.warn("Falha ao carregar catálogos auxiliares:", error);
+        }
+    }
+
+    // BUSCA OCORRÊNCIAS (Sistema Local)
+    async function buscarDadosAPI() {
+        try {
+            const response = await fetch(`${SERVIDOR_SISTEMA}/ocorrencias/`, obterOpcoesFetchSistema());
+            if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+            
+            dadosGlobais = await response.json();
+            
+            if (typeof atualizarDashboard === "function") {
+                atualizarDashboard(dadosGlobais);
+            }
+        } catch (error) {
+            console.error("Falha ao carregar ocorrências:", error);
+            const elTabela = document.getElementById("tabelaOcorrencias");
+            if (elTabela) {
+                elTabela.innerHTML = `
+                    <tr><td colspan="5" class="py-6 text-red-400 text-center text-base font-bold">Erro ao carregar dados dos servidores.</td></tr>
+                `;
+            }
+        }
+    }
+
+</script>
+
 </body>
 </html>
